@@ -378,7 +378,7 @@ Request Headers:
 ${formatHeaders(entry.requestHeaders)}
 
 Request Body:
-${entry.requestBody || 'No request body'}
+${entry.requestBody}
 
 Response Headers:
 ${formatHeaders(entry.responseHeaders)}
@@ -394,7 +394,7 @@ ${entry.responseBody}
     networkDetails.classList.remove('hidden');
     networkContainer.classList.add('hidden');
 };
-
+ 
 const formatHeaders = (headers) => {
     return Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\n');
 };
@@ -413,18 +413,38 @@ const originalFetch = window.fetch;
 window.fetch = async (...args) => {
     const start = performance.now();
     try {
+        const request = args[1] || {};
+        let requestBody = 'No request body';
+        if (request.body) {
+            if (typeof request.body === 'string') {
+                requestBody = request.body;
+            } else if (request.body instanceof FormData) {
+                requestBody = '[FormData]';
+            } else if (request.body instanceof URLSearchParams) {
+                requestBody = request.body.toString();
+            } else if (request.body instanceof Blob) {
+                requestBody = '[Blob]';
+            } else {
+                try {
+                    requestBody = JSON.stringify(request.body);
+                } catch (e) {
+                    requestBody = '[Unable to stringify request body]';
+                }
+            }
+        }
+
         const response = await originalFetch(...args);
         const time = performance.now() - start;
         const clone = response.clone();
         const responseBody = await clone.text();
         addNetworkEntry({
             url: args[0],
-            method: args[1]?.method || 'GET',
+            method: request.method || 'GET',
             status: response.status,
             type: 'fetch',
             time: time.toFixed(2),
-            requestHeaders: args[1]?.headers || {},
-            requestBody: args[1]?.body || 'No request body',
+            requestHeaders: request.headers || {},
+            requestBody: requestBody,
             responseHeaders: Object.fromEntries(response.headers.entries()),
             responseBody: responseBody
         });
@@ -437,6 +457,7 @@ window.fetch = async (...args) => {
             type: 'fetch',
             time: (performance.now() - start).toFixed(2),
             requestHeaders: args[1]?.headers || {},
+            requestBody: 'No request body',
             responseHeaders: {},
             responseBody: error.message
         });
@@ -463,9 +484,26 @@ XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
     originalXHRSetRequestHeader.apply(this, arguments);
 };
 
-XMLHttpRequest.prototype.send = function(...args) {
+XMLHttpRequest.prototype.send = function(body) {
+    this._networkInfo.body = body;
     this.addEventListener('load', () => {
         const time = performance.now() - this._networkInfo.start;
+        let requestBody = 'No request body';
+        if (this._networkInfo.body) {
+            if (typeof this._networkInfo.body === 'string') {
+                requestBody = this._networkInfo.body;
+            } else if (this._networkInfo.body instanceof FormData) {
+                requestBody = '[FormData]';
+            } else if (this._networkInfo.body instanceof Blob) {
+                requestBody = '[Blob]';
+            } else {
+                try {
+                    requestBody = JSON.stringify(this._networkInfo.body);
+                } catch (e) {
+                    requestBody = '[Unable to stringify request body]';
+                }
+            }
+        }
         addNetworkEntry({
             url: this._networkInfo.url,
             method: this._networkInfo.method,
@@ -473,12 +511,12 @@ XMLHttpRequest.prototype.send = function(...args) {
             type: 'xhr',
             time: time.toFixed(2),
             requestHeaders: this._networkInfo.requestHeaders,
-            requestBody: this._networkInfo.body || 'No request body',
+            requestBody: requestBody,
             responseHeaders: parseResponseHeaders(this.getAllResponseHeaders()),
             responseBody: this.responseText
         });
     });
-    originalXHRSend.apply(this, args);
+    originalXHRSend.apply(this, arguments);
 };
 
 const parseResponseHeaders = (headerStr) => {
