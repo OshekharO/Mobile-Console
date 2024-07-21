@@ -624,7 +624,7 @@ function toggleConsole() {
     isMinimized = !isMinimized;
     consoleContainer.classList.toggle('minimized', isMinimized);
     consoleToggle.classList.toggle('hidden', !isMinimized);
-    minimizeButton.textContent = isMinimized ? '□' : '_';
+    minimizeButton.textContent = isMinimized ? '+' : '_';
 }
 
 minimizeButton.addEventListener('click', toggleConsole);
