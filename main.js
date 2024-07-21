@@ -47,7 +47,6 @@
             </div>
         </div>
     </div>
-    <div id="dev-console-toggle" class="dev-console-toggle hidden">Dev Console</div>
     `;
 
  const consoleStyles = `
@@ -237,20 +236,6 @@
       .dev-console-container.minimized {
          height: 30px;
          overflow: hidden;
-      }
-      .dev-console-toggle {
-         position: fixed;
-         bottom: 0;
-         right: 0;
-         background: ${theme === 'light' ? '#f0f0f0' : '#2d2d2d'};
-         color: ${theme === 'light' ? '#000' : '#fff'};
-         padding: 5px 10px;
-         cursor: pointer;
-         border-top-left-radius: 5px;
-         border: 1px solid ${theme === 'light' ? '#ccc' : '#3d3d3d'};
-         border-bottom: none;
-         font-size: 12px;
-         z-index: 10001;
       }
       #consoleMinimize {
          font-size: 18px;
@@ -602,7 +587,6 @@ aboutInfo.innerHTML = `
  // Close button functionality
  document.getElementById("consoleExit").addEventListener("click", () => {
     document.getElementById("dev-console").remove();
-    document.getElementById("dev-console-toggle").remove();
 });
 
  // Override console methods
@@ -615,7 +599,6 @@ aboutInfo.innerHTML = `
  });
 
 const consoleContainer = document.getElementById('dev-console');
-const consoleToggle = document.getElementById('dev-console-toggle');
 const minimizeButton = document.getElementById('consoleMinimize');
 
 let isMinimized = false;
@@ -623,12 +606,10 @@ let isMinimized = false;
 function toggleConsole() {
     isMinimized = !isMinimized;
     consoleContainer.classList.toggle('minimized', isMinimized);
-    consoleToggle.classList.toggle('hidden', !isMinimized);
-    minimizeButton.textContent = isMinimized ? '+' : '_';
+    minimizeButton.textContent = isMinimized ? '+' : '−';
 }
 
 minimizeButton.addEventListener('click', toggleConsole);
-consoleToggle.addEventListener('click', toggleConsole);
-
+ 
  log("Mobile Dev Console initialized", "info");
 })();
