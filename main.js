@@ -26,12 +26,19 @@
             <div id="sectionElements" class="dev-console-section hidden">
                 <div class="elements-controls">
                     <button id="elementViewer">View HTML</button>
+                    <button id="inspectorToggle">Toggle Inspector</button>
                 </div>
                 <div class="elements-container"></div>
             </div>
             <div id="sectionNetwork" class="dev-console-section hidden">
                 <div class="network-controls">
                     <button id="clearNetwork">Clear</button>
+                    <input type="text" id="networkFilter" placeholder="Filter requests...">
+                    <select id="networkTypeFilter">
+                        <option value="all">All Types</option>
+                        <option value="fetch">Fetch</option>
+                        <option value="xhr">XHR</option>
+                    </select>
                 </div>
                 <div class="network-container"></div>
                 <div class="network-details hidden"></div>
@@ -63,6 +70,7 @@
         flex-direction: column;
         box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
         color: ${theme === 'light' ? '#000' : '#fff'};
+        transition: height 0.3s ease;
     }
     .dev-console-nav {
         display: flex;
@@ -241,6 +249,40 @@
          font-size: 18px;
          line-height: 14px;
       }
+      .highlight {
+        background-color: yellow;
+        outline: 2px solid red;
+      }
+      .object-preview {
+        cursor: pointer;
+        color: #2196f3;
+      }
+      .object-expanded {
+        margin-left: 20px;
+      }
+      .syntax-string { color: #a31515; }
+      .syntax-number { color: #098658; }
+      .syntax-boolean { color: #0000ff; }
+      .syntax-null { color: #0000ff; }
+      .syntax-key { color: #2196f3; }
+      #networkFilter, #networkTypeFilter {
+        padding: 5px;
+        margin-right: 10px;
+        border-radius: 4px;
+        border: 1px solid ${theme === 'light' ? '#ccc' : '#3d3d3d'};
+      }
+      @media (max-width: 768px) {
+        .dev-console-container {
+          font-size: 14px;
+        }
+        .dev-console-nav-button {
+          padding: 8px 10px;
+          font-size: 12px;
+        }
+        #consoleInput {
+          font-size: 14px;
+        }
+      }
 `;
 
  // Inject HTML and CSS
@@ -280,7 +322,7 @@
    default:
     color = theme === 'light' ? "#000000" : "#ffffff";
   }
-  line.innerHTML = `<span style="color: ${theme === 'light' ? '#888' : '#aaa'};">[${timestamp}]</span> <span style="color: ${color};">[${type}]</span> <span style="color: ${theme === 'light' ? '#000' : '#fff'};">${message}</span>`;
+  line.innerHTML = `<span style="color: ${theme === 'light' ? '#888' : '#aaa'};">[${timestamp}]</span> <span style="color: ${color};">[${type}]</span> <span style="color: ${theme === 'light' ? '#000' : '#fff'};">${prettyPrint(message)}</span>`;
   consoleOutput.appendChild(line);
   consoleOutput.scrollTop = consoleOutput.scrollHeight;
  };
@@ -321,24 +363,42 @@
   });
  });
 
- // Element Viewer functionality
+ // Element Inspector functionality
+let isInspectorActive = false;
+const elementsContainer = document.querySelector('.elements-container');
+
 document.getElementById('elementViewer').addEventListener('click', () => {
-    const elementsContainer = document.querySelector('.elements-container');
     const devConsole = document.getElementById('dev-console');
     devConsole.style.display = 'none';
     const html = document.documentElement.outerHTML;
     devConsole.style.display = '';
     
-    // Remove the dev-console HTML from the output
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
     doc.getElementById('dev-console').remove();
     const cleanHtml = doc.documentElement.outerHTML;
     
-    // Display the HTML as-is
-    elementsContainer.textContent = cleanHtml;
+    elementsContainer.innerHTML = syntaxHighlight(cleanHtml);
     log('Page HTML loaded in the Elements tab.', 'info');
 });
+
+document.getElementById('inspectorToggle').addEventListener('click', () => {
+    isInspectorActive = !isInspectorActive;
+    document.body.style.cursor = isInspectorActive ? 'crosshair' : '';
+    log(isInspectorActive ? 'Inspector activated. Click on an element to inspect.' : 'Inspector deactivated.', 'info');
+});
+
+document.body.addEventListener('click', (e) => {
+    if (isInspectorActive) {
+        e.preventDefault();
+        e.stopPropagation();
+        const element = e.target;
+        element.classList.add('highlight');
+        setTimeout(() => element.classList.remove('highlight'), 1500);
+        elementsContainer.innerHTML = syntaxHighlight(element.outerHTML);
+        log('Element inspected and loaded in the Elements tab.', 'info');
+    }
+}, true);
 
  // Network monitoring functionality
 const networkContainer = document.querySelector('.network-container');
@@ -351,8 +411,14 @@ const addNetworkEntry = (entry) => {
 };
 
 const updateNetworkDisplay = () => {
+    const filter = document.getElementById('networkFilter').value.toLowerCase();
+    const typeFilter = document.getElementById('networkTypeFilter').value;
+    
     networkContainer.innerHTML = '';
-    networkLog.forEach((entry, index) => {
+    networkLog.filter(entry => {
+        return (entry.url.toLowerCase().includes(filter) || entry.type.toLowerCase().includes(filter))
+            && (typeFilter === 'all' || entry.type === typeFilter);
+    }).forEach((entry, index) => {
         const item = document.createElement('div');
         item.className = 'network-item';
         item.innerHTML = `
@@ -387,13 +453,13 @@ Request Headers:
 ${formatHeaders(entry.requestHeaders)}
 
 Request Body:
-${entry.requestBody}
+${syntaxHighlight(entry.requestBody)}
 
 Response Headers:
 ${formatHeaders(entry.responseHeaders)}
 
 Response Body:
-${entry.responseBody}
+${syntaxHighlight(entry.responseBody)}
         </pre>
     `;
     networkDetails.querySelector('.back-button').addEventListener('click', () => {
@@ -405,7 +471,7 @@ ${entry.responseBody}
 };
  
 const formatHeaders = (headers) => {
-    return Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\n');
+    return Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\\n');
 };
 
 const clearNetworkLog = () => {
@@ -416,6 +482,8 @@ const clearNetworkLog = () => {
 };
 
 document.getElementById('clearNetwork').addEventListener('click', clearNetworkLog);
+document.getElementById('networkFilter').addEventListener('input', updateNetworkDisplay);
+document.getElementById('networkTypeFilter').addEventListener('change', updateNetworkDisplay);
 
 // Override fetch and XMLHttpRequest to monitor network requests
 const originalFetch = window.fetch;
@@ -533,10 +601,10 @@ const parseResponseHeaders = (headerStr) => {
     if (!headerStr) {
         return headers;
     }
-    const headerPairs = headerStr.trim().split('\u000d\u000a');
+    const headerPairs = headerStr.trim().split('\\u000d\\u000a');
     for (let i = 0; i < headerPairs.length; i++) {
         const headerPair = headerPairs[i];
-        const index = headerPair.indexOf('\u003a\u0020');
+        const index = headerPair.indexOf('\\u003a\\u0020');
         if (index > 0) {
             const key = headerPair.substring(0, index);
             const val = headerPair.substring(index + 2);
@@ -594,7 +662,7 @@ aboutInfo.innerHTML = `
  ["log", "error", "warn", "info"].forEach((method) => {
   console[method] = (...args) => {
     log(args.map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : arg)).join(" "), method);
-    return args.length <= 1 ? args[0] : args;
+    originalConsole[method](...args);
   };
  });
 
@@ -610,6 +678,103 @@ function toggleConsole() {
 }
 
 minimizeButton.addEventListener('click', toggleConsole);
- 
- log("Mobile Dev Console initialized", "info");
+
+// Pretty-print for Objects
+function prettyPrint(obj) {
+    if (typeof obj === 'object' && obj !== null) {
+        return `<span class="object-preview" onclick="this.nextElementSibling.classList.toggle('hidden'); this.textContent = this.textContent === '▶' ? '▼' : '▶';">▶</span> <span class="object-expanded hidden">${JSON.stringify(obj, null, 2)}</span>`;
+    }
+    return syntaxHighlight(JSON.stringify(obj));
+}
+
+// Syntax Highlighting
+function syntaxHighlight(json) {
+    if (typeof json != 'string') {
+        json = JSON.stringify(json, undefined, 2);
+    }
+    json = json.replace(/&/g, '&amp;').replace(/</g, '<').replace(/>/g, '>');
+    return json.replace(/("(\\\\u[a-zA-Z0-9]{4}|\\\\[^u]|[^\\\\"])*"(\\s*:)?|\\b(true|false|null)\\b|-?\\d+(?:\\.\\d*)?(?:[eE][+\\-]?\\d+)?)/g, function (match) {
+        var cls = 'syntax-number';
+        if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+                cls = 'syntax-key';
+            } else {
+                cls = 'syntax-string';
+            }
+        } else if (/true|false/.test(match)) {
+            cls = 'syntax-boolean';
+        } else if (/null/.test(match)) {
+            cls = 'syntax-null';
+        }
+        return '<span class="' + cls + '">' + match + '</span>';
+    });
+}
+
+// Performance Optimizations
+const debounce = (func, delay) => {
+    let inDebounce;
+    return function() {
+        const context = this;
+        const args = arguments;
+        clearTimeout(inDebounce);
+        inDebounce = setTimeout(() => func.apply(context, args), delay);
+    }
+};
+
+const debouncedUpdateNetworkDisplay = debounce(updateNetworkDisplay, 300);
+
+// Use a virtual DOM for large network logs
+class VirtualScroller {
+    constructor(container, items, rowHeight) {
+        this.container = container;
+        this.items = items;
+        this.rowHeight = rowHeight;
+        this.visibleItems = Math.ceil(container.clientHeight / rowHeight);
+        this.scrollTop = 0;
+        this.startIndex = 0;
+        this.endIndex = this.visibleItems;
+
+        this.container.style.height = `${items.length * rowHeight}px`;
+        this.container.style.overflowY = 'auto';
+        this.container.addEventListener('scroll', this.onScroll.bind(this));
+
+        this.render();
+    }
+
+    onScroll() {
+        const newScrollTop = this.container.scrollTop;
+        const delta = newScrollTop - this.scrollTop;
+        this.scrollTop = newScrollTop;
+
+        if (Math.abs(delta) > this.visibleItems * this.rowHeight) {
+            this.startIndex = Math.floor(this.scrollTop / this.rowHeight);
+        } else {
+            this.startIndex += Math.floor(delta / this.rowHeight);
+        }
+
+        this.startIndex = Math.max(0, Math.min(this.startIndex, this.items.length - this.visibleItems));
+        this.endIndex = Math.min(this.startIndex + this.visibleItems, this.items.length);
+
+        this.render();
+    }
+
+    render() {
+        const fragment = document.createDocumentFragment();
+        for (let i = this.startIndex; i < this.endIndex; i++) {
+            const item = this.items[i];
+            const div = document.createElement('div');
+            div.style.position = 'absolute';
+            div.style.top = `${i * this.rowHeight}px`;
+            div.style.height = `${this.rowHeight}px`;
+            div.innerHTML = item;
+            fragment.appendChild(div);
+        }
+
+        this.container.innerHTML = '';
+        this.container.appendChild(fragment);
+    }
+}
+
+// Initialize the console
+log("Mobile Dev Console initialized", "info");
 })();
