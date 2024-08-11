@@ -241,38 +241,6 @@
          font-size: 18px;
          line-height: 14px;
       }
-    .html-controls {
-        margin-bottom: 10px;
-    }
-    .html-controls button {
-        margin-right: 10px;
-    }
-    .html-content {
-        white-space: pre-wrap;
-        font-family: monospace;
-        font-size: 12px;
-    }
-    .html-content .tag {
-        color: #0000ff;
-    }
-    .html-content .collapsible {
-        cursor: pointer;
-    }
-    .html-content .collapsible.collapsed > * {
-        display: none;
-    }
-    .html-content .collapsible.collapsed > .tag:first-child {
-        display: inline;
-    }
-    .network-detail-section {
-        margin-bottom: 20px;
-    }
-    .network-detail-section h4 {
-        margin-bottom: 5px;
-    }
-    .copy-button {
-        margin-top: 5px;
-    }
 `;
 
  // Inject HTML and CSS
@@ -367,66 +335,10 @@ document.getElementById('elementViewer').addEventListener('click', () => {
     doc.getElementById('dev-console').remove();
     const cleanHtml = doc.documentElement.outerHTML;
     
-    // Format HTML with syntax highlighting
-    const formattedHtml = formatHtml(cleanHtml);
-    elementsContainer.innerHTML = `
-        <div class="html-controls">
-            <button id="copyHtml">Copy HTML</button>
-            <button id="expandAll">Expand All</button>
-            <button id="collapseAll">Collapse All</button>
-        </div>
-        <pre class="html-content">${formattedHtml}</pre>
-    `;
-    
-    // Add event listeners for new buttons
-    document.getElementById('copyHtml').addEventListener('click', () => {
-        navigator.clipboard.writeText(cleanHtml).then(() => {
-            log('HTML copied to clipboard', 'info');
-        });
-    });
-    
-    document.getElementById('expandAll').addEventListener('click', () => {
-        document.querySelectorAll('.html-content .collapsible').forEach(el => el.classList.remove('collapsed'));
-    });
-    
-    document.getElementById('collapseAll').addEventListener('click', () => {
-        document.querySelectorAll('.html-content .collapsible').forEach(el => el.classList.add('collapsed'));
-    });
-    
-    // Add click event for collapsible elements
-    document.querySelectorAll('.html-content .collapsible').forEach(el => {
-        el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            el.classList.toggle('collapsed');
-        });
-    });
-    
+    // Display the HTML as-is
+    elementsContainer.textContent = cleanHtml;
     log('Page HTML loaded in the Elements tab.', 'info');
 });
-
-function formatHtml(html) {
-    let formatted = '';
-    let indent = 0;
-    const lines = html.split(/>\\s*</);
-    lines.forEach((line, index) => {
-        if (index > 0) formatted += '<';
-        if (line.indexOf('/') === 0 && indent > 0) indent--;
-        formatted += '  '.repeat(indent) + line.trim();
-        if (line.indexOf('/') !== 0 && line.indexOf('/>') === -1) indent++;
-        if (index < lines.length - 1) formatted += '>';
-        formatted += '\\n';
-    });
-    
-    // Add collapsible feature
-    formatted = formatted.replace(/<([a-z0-9]+)([^>]*)>/gi, (match, tag, attrs) => {
-        return `<span class="collapsible"><span class="tag"><${tag}${attrs}></span>`;
-    });
-    formatted = formatted.replace(/<\\/([a-z0-9]+)>/gi, (match, tag) => {
-        return `</span><span class="tag"></${tag}></span>`;
-    });
-    
-    return formatted;
-}
 
  // Network monitoring functionality
 const networkContainer = document.querySelector('.network-container');
@@ -464,66 +376,26 @@ const showNetworkDetails = (index) => {
     networkDetails.innerHTML = `
         <button class="back-button">Back to Network List</button>
         <h3>Request Details</h3>
-        <div class="network-detail-section">
-            <h4>General</h4>
-            <pre>
+        <pre>
 URL: ${entry.url}
 Method: ${entry.method}
 Status: ${entry.status}
 Type: ${entry.type}
 Time: ${entry.time}ms
-            </pre>
-            <button class="copy-button" data-content="general">Copy</button>
-        </div>
-        <div class="network-detail-section">
-            <h4>Request Headers</h4>
-            <pre>${formatHeaders(entry.requestHeaders)}</pre>
-            <button class="copy-button" data-content="requestHeaders">Copy</button>
-        </div>
-        <div class="network-detail-section">
-            <h4>Request Body</h4>
-            <pre>${entry.requestBody}</pre>
-            <button class="copy-button" data-content="requestBody">Copy</button>
-        </div>
-        <div class="network-detail-section">
-            <h4>Response Headers</h4>
-            <pre>${formatHeaders(entry.responseHeaders)}</pre>
-            <button class="copy-button" data-content="responseHeaders">Copy</button>
-        </div>
-        <div class="network-detail-section">
-            <h4>Response Body</h4>
-            <pre>${entry.responseBody}</pre>
-            <button class="copy-button" data-content="responseBody">Copy</button>
-        </div>
+
+Request Headers:
+${formatHeaders(entry.requestHeaders)}
+
+Request Body:
+${entry.requestBody}
+
+Response Headers:
+${formatHeaders(entry.responseHeaders)}
+
+Response Body:
+${entry.responseBody}
+        </pre>
     `;
-    
-    networkDetails.querySelectorAll('.copy-button').forEach(button => {
-        button.addEventListener('click', () => {
-            const content = button.dataset.content;
-            let textToCopy = '';
-            switch (content) {
-                case 'general':
-                    textToCopy = `URL: ${entry.url}\\nMethod: ${entry.method}\\nStatus: ${entry.status}\\nType: ${entry.type}\\nTime: ${entry.time}ms`;
-                    break;
-                case 'requestHeaders':
-                    textToCopy = formatHeaders(entry.requestHeaders);
-                    break;
-                case 'requestBody':
-                    textToCopy = entry.requestBody;
-                    break;
-                case 'responseHeaders':
-                    textToCopy = formatHeaders(entry.responseHeaders);
-                    break;
-                case 'responseBody':
-                    textToCopy = entry.responseBody;
-                    break;
-            }
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                log(`${content} copied to clipboard`, 'info');
-            });
-        });
-    });
-    
     networkDetails.querySelector('.back-button').addEventListener('click', () => {
         networkDetails.classList.add('hidden');
         networkContainer.classList.remove('hidden');
@@ -533,7 +405,7 @@ Time: ${entry.time}ms
 };
  
 const formatHeaders = (headers) => {
-    return Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\\n');
+    return Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\n');
 };
 
 const clearNetworkLog = () => {
@@ -661,10 +533,10 @@ const parseResponseHeaders = (headerStr) => {
     if (!headerStr) {
         return headers;
     }
-    const headerPairs = headerStr.trim().split('\\u000d\\u000a');
+    const headerPairs = headerStr.trim().split('\u000d\u000a');
     for (let i = 0; i < headerPairs.length; i++) {
         const headerPair = headerPairs[i];
-        const index = headerPair.indexOf('\\u003a\\u0020');
+        const index = headerPair.indexOf('\u003a\u0020');
         if (index > 0) {
             const key = headerPair.substring(0, index);
             const val = headerPair.substring(index + 2);
@@ -722,7 +594,7 @@ aboutInfo.innerHTML = `
  ["log", "error", "warn", "info"].forEach((method) => {
   console[method] = (...args) => {
     log(args.map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : arg)).join(" "), method);
-    originalConsole[method](...args);
+    return args.length <= 1 ? args[0] : args;
   };
  });
 
