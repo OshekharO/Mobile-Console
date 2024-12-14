@@ -22,6 +22,24 @@ javascript:(function(){var script=document.createElement('script');script.src='h
 
 You can customize the console by modifying the CSS styles in the script. The console automatically detects and adapts to light and dark color schemes.
 
+# Alternative
+
+>vconsole
+```javascript
+javascript:(function() {
+    var script = document.createElement('script');
+    script.src = "https://unpkg.com/vconsole@latest/dist/vconsole.min.js";
+    document.body.appendChild(script);
+    script.onload = function() {
+        var vConsole = new window.VConsole();
+    };
+})();
+```
+>eruda
+```javascript
+javascript:(function () { var script = document.createElement('script'); script.src="https://cdn.jsdelivr.net/npm/eruda@3.4.1/eruda.min.js"; document.body.append(script); script.onload = function () { eruda.init(); } })();
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
