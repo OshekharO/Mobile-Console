@@ -372,12 +372,12 @@
         button.addEventListener("click", () => {
             const targetId = button.id.replace("nav", "section");
             sections.forEach((section) => {
-                section.classList.add("hidden");
-                setTimeout(() => section.style.display = "none", 300); // Delay for animation
+                section.style.display = "none"; // Immediately hide the section
+                section.classList.add("hidden"); // Add the hidden class for animations
             });
             const targetSection = document.getElementById(targetId);
-            targetSection.style.display = "flex";
-            setTimeout(() => targetSection.classList.remove("hidden"), 10); // Delay for animation
+            targetSection.style.display = "flex"; // Show the target section
+            setTimeout(() => targetSection.classList.remove("hidden"), 10); // Remove the hidden class for animations
             navButtons.forEach((btn) => btn.classList.remove("active"));
             button.classList.add("active");
         });
