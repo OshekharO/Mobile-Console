@@ -23,11 +23,13 @@
                     <div class="console-input-wrapper">
                         <button id="clearConsole">Clear Console</button>
                         <textarea id="consoleInput" placeholder="Enter JavaScript..."></textarea>
+                        <div id="commandSuggestions" class="command-suggestions"></div>
                     </div>
                 </div>
                 <div id="sectionElements" class="dev-console-section hidden">
                     <div class="elements-controls">
                         <button id="elementViewer">View HTML</button>
+                        <button id="editElement">Edit Element</button>
                     </div>
                     <div class="elements-container"></div>
                 </div>
@@ -66,6 +68,7 @@
             flex-direction: column;
             box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
             color: ${theme === 'light' ? '#000' : '#fff'};
+            transition: height 0.3s ease;
         }
         .dev-console-nav {
             display: flex;
@@ -81,6 +84,7 @@
             font-size: 14px;
             flex-grow: 1;
             text-align: center;
+            transition: background 0.3s ease;
         }
         .dev-console-nav-button.active {
             background: ${theme === 'light' ? '#ffffff' : '#3d3d3d'};
@@ -100,9 +104,12 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
+            transition: opacity 0.3s ease, transform 0.3s ease;
         }
         .hidden {
             display: none !important;
+            opacity: 0;
+            transform: translateY(10px);
         }
         .console-output, .network-container, .network-details, .elements-container {
             flex-grow: 1;
@@ -116,6 +123,7 @@
         .console-input-wrapper {
             border-top: 1px solid ${theme === 'light' ? '#eee' : '#3d3d3d'};
             padding: 10px;
+            position: relative;
         }
         #consoleInput {
             width: 100%;
@@ -128,6 +136,27 @@
             margin-top: 10px;
             color: ${theme === 'light' ? '#000' : '#fff'};
             background: ${theme === 'light' ? '#fff' : '#2d2d2d'};
+        }
+        .command-suggestions {
+            position: absolute;
+            bottom: 60px;
+            left: 10px;
+            right: 10px;
+            background: ${theme === 'light' ? '#fff' : '#2d2d2d'};
+            border: 1px solid ${theme === 'light' ? '#ccc' : '#3d3d3d'};
+            border-radius: 4px;
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+        .command-suggestions div {
+            padding: 5px 10px;
+            cursor: pointer;
+            color: ${theme === 'light' ? '#000' : '#fff'};
+        }
+        .command-suggestions div:hover {
+            background: ${theme === 'light' ? '#f0f0f0' : '#3d3d3d'};
         }
         .elements-controls, .network-controls, .info-controls {
             display: flex;
@@ -261,6 +290,7 @@
     // Console functionality
     const consoleOutput = document.querySelector(".console-output");
     const consoleInput = document.getElementById("consoleInput");
+    const commandSuggestions = document.getElementById("commandSuggestions");
 
     const log = (message, type = "log") => {
         const line = document.createElement("div");
@@ -295,6 +325,30 @@
 
     document.getElementById("clearConsole").addEventListener("click", clearConsole);
 
+    // Command suggestions
+    const commands = ["log", "error", "warn", "info", "clear", "fetch", "document", "window"];
+    consoleInput.addEventListener("input", (e) => {
+        const input = e.target.value.trim();
+        if (input.length > 0) {
+            const suggestions = commands.filter(cmd => cmd.startsWith(input));
+            if (suggestions.length > 0) {
+                commandSuggestions.innerHTML = suggestions.map(cmd => `<div>${cmd}</div>`).join("");
+                commandSuggestions.style.display = "block";
+            } else {
+                commandSuggestions.style.display = "none";
+            }
+        } else {
+            commandSuggestions.style.display = "none";
+        }
+    });
+
+    commandSuggestions.addEventListener("click", (e) => {
+        if (e.target.tagName === "DIV") {
+            consoleInput.value = e.target.textContent;
+            commandSuggestions.style.display = "none";
+        }
+    });
+
     consoleInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -317,8 +371,13 @@
     navButtons.forEach((button) => {
         button.addEventListener("click", () => {
             const targetId = button.id.replace("nav", "section");
-            sections.forEach((section) => section.classList.add("hidden"));
-            document.getElementById(targetId)?.classList.remove("hidden");
+            sections.forEach((section) => {
+                section.classList.add("hidden");
+                setTimeout(() => section.style.display = "none", 300); // Delay for animation
+            });
+            const targetSection = document.getElementById(targetId);
+            targetSection.style.display = "flex";
+            setTimeout(() => targetSection.classList.remove("hidden"), 10); // Delay for animation
             navButtons.forEach((btn) => btn.classList.remove("active"));
             button.classList.add("active");
         });
@@ -341,6 +400,23 @@
         // Display the HTML as-is
         elementsContainer.textContent = cleanHtml;
         log('Page HTML loaded in the Elements tab.', 'info');
+    });
+
+    // Edit Element functionality
+    document.getElementById('editElement').addEventListener('click', () => {
+        const elementsContainer = document.querySelector('.elements-container');
+        elementsContainer.contentEditable = true;
+        elementsContainer.focus();
+        log('Elements are now editable.', 'info');
+    });
+
+    // Click to view element
+    document.addEventListener('click', (e) => {
+        if (e.target !== document.getElementById('dev-console')) {
+            const elementsContainer = document.querySelector('.elements-container');
+            elementsContainer.textContent = e.target.outerHTML;
+            log('Element clicked and displayed in the Elements tab.', 'info');
+        }
     });
 
     // Network monitoring functionality
