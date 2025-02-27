@@ -610,6 +610,10 @@ ${entry.responseBody}
         isMinimized = !isMinimized;
         consoleContainer.classList.toggle('minimized', isMinimized);
         minimizeButton.textContent = isMinimized ? '+' : '−';
+        if (!isMinimized) {
+            const consoleTab = document.getElementById('navConsole');
+            consoleTab.click();
+        }
     }
 
     minimizeButton.addEventListener('click', toggleConsole);
