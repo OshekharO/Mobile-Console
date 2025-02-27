@@ -584,6 +584,7 @@ ${entry.responseBody}
             <p><strong>Screen Size:</strong> ${window.screen.width}x${window.screen.height}</p>
             <p><strong>Viewport Size:</strong> ${window.innerWidth}x${window.innerHeight}</p>
             <p><strong>Device Pixel Ratio:</strong> ${window.devicePixelRatio}</p>
+            <p><strong>Browser Name:</strong> ${navigator.appName}</p>
             <p><strong>Browser Language:</strong> ${navigator.language}</p>
         `;
 
