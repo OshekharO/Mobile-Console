@@ -412,7 +412,9 @@
 
     // Click to view element
     document.addEventListener('click', (e) => {
-        if (e.target !== document.getElementById('dev-console')) {
+        const devConsole = document.getElementById('dev-console');
+        // Check if the click is outside the dev console
+        if (!devConsole.contains(e.target)) {
             const elementsContainer = document.querySelector('.elements-container');
             elementsContainer.textContent = e.target.outerHTML;
             log('Element clicked and displayed in the Elements tab.', 'info');
