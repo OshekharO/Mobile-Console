@@ -688,6 +688,12 @@ ${entry.responseBody}
         isMinimized = !isMinimized;
         consoleContainer.classList.toggle('minimized', isMinimized);
         minimizeButton.textContent = isMinimized ? '+' : '−';
+
+        // Ensure the Console tab is active when maximizing
+        if (!isMinimized) {
+            const consoleTab = document.getElementById('navConsole');
+            consoleTab.click(); // Simulate a click on the Console tab
+        }
     }
 
     minimizeButton.addEventListener('click', toggleConsole);
