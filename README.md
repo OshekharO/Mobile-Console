@@ -37,7 +37,7 @@ javascript:(function() {
 ```
 >eruda
 ```javascript
-javascript:(function () { var script = document.createElement('script'); script.src="https://cdn.jsdelivr.net/npm/eruda@3.4.1/eruda.min.js"; document.body.append(script); script.onload = function () { eruda.init(); } })();
+javascript:(function () { var script = document.createElement('script'); script.src="https://cdn.jsdelivr.net/npm/eruda@3.4.3/eruda.min.js"; document.body.append(script); script.onload = function () { eruda.init(); } })();
 ```
 
 ## Contributing
