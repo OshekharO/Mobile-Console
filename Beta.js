@@ -37,7 +37,7 @@
             </div>
             
             <!-- Console Content -->
-            <div class="flex-1 overflow-hidden">
+            <div class="flex-1 overflow-hidden flex flex-col">
                 <!-- Console Section -->
                 <div id="sectionConsole" class="h-full flex flex-col">
                     <div class="console-output flex-1 overflow-y-auto p-3 font-mono text-sm bg-white dark:bg-gray-900"></div>
@@ -96,6 +96,73 @@
         </div>
     `;
 
+    // Custom CSS for additional styling
+    const customStyles = `
+        .console-output::-webkit-scrollbar {
+            width: 6px;
+        }
+        .console-output::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .console-output::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        .dark .console-output::-webkit-scrollbar-track {
+            background: #2d3748;
+        }
+        .dark .console-output::-webkit-scrollbar-thumb {
+            background: #4a5568;
+        }
+        
+        .network-container::-webkit-scrollbar,
+        .elements-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .network-container::-webkit-scrollbar-track,
+        .elements-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .network-container::-webkit-scrollbar-thumb,
+        .elements-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        .dark .network-container::-webkit-scrollbar-track,
+        .dark .elements-container::-webkit-scrollbar-track {
+            background: #2d3748;
+        }
+        .dark .network-container::-webkit-scrollbar-thumb,
+        .dark .elements-container::-webkit-scrollbar-thumb {
+            background: #4a5568;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .console-entry {
+            animation: fadeIn 0.2s ease-out;
+        }
+        
+        @media (max-width: 640px) {
+            .dev-console-container {
+                height: 60% !important;
+            }
+            .dev-console-container.minimized {
+                height: 40px !important;
+            }
+            .nav-buttons-container {
+                flex-wrap: wrap;
+            }
+            .nav-button {
+                flex: 1 0 33%;
+                font-size: 12px;
+                padding: 8px 4px;
+            }
+        }
+    `;
+
     // Inject HTML into the document
     const injectElement = (html) => {
         const div = document.createElement("div");
@@ -113,6 +180,11 @@
     const tailwind = document.createElement('script');
     tailwind.src = 'https://cdn.tailwindcss.com';
     document.head.appendChild(tailwind);
+
+    // Add custom styles
+    const styleElement = document.createElement('style');
+    styleElement.textContent = customStyles;
+    document.head.appendChild(styleElement);
 
     document.body.appendChild(injectElement(consoleHTML));
 
@@ -199,9 +271,9 @@
 
     executeButton.addEventListener("click", executeCode);
 
-    // Navigation functionality
+    // FIXED: Navigation functionality
     const navButtons = document.querySelectorAll(".nav-button");
-    const sections = document.querySelectorAll(".dev-console-section");
+    const sections = document.querySelectorAll("[id^='section']");
 
     navButtons.forEach((button) => {
         button.addEventListener("click", () => {
@@ -216,9 +288,16 @@
             button.classList.remove("border-transparent", "text-gray-500", "dark:text-gray-400");
             button.classList.add("border-blue-500", "text-blue-600", "dark:text-blue-400");
             
-            // Show/hide sections
-            sections.forEach((section) => section.classList.add("hidden"));
-            document.getElementById(targetId)?.classList.remove("hidden");
+            // Show/hide sections - FIXED: Properly hide all sections first
+            sections.forEach((section) => {
+                section.classList.add("hidden");
+            });
+            
+            // Show the target section
+            const targetSection = document.getElementById(targetId);
+            if (targetSection) {
+                targetSection.classList.remove("hidden");
+            }
         });
     });
 
@@ -291,7 +370,7 @@
 
     // Network monitoring functionality
     const networkContainer = document.querySelector('.network-container');
-    const networkDetails = document.getElementById('network-details');
+    const networkDetails = document.getElementById('networkDetails');
     let networkLog = [];
     let isRecording = true;
 
