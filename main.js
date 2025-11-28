@@ -1570,8 +1570,8 @@
     // Element Viewer functionality
     let currentCleanHtml = '';
     
-    const handleElementViewer = () => {
-        const elementsContainer = document.querySelector('.elements-container');
+    // Helper function to get clean HTML without displaying it
+    const getCleanHtml = () => {
         const devConsole = document.getElementById('dev-console');
         devConsole.style.display = 'none';
         const html = document.documentElement.outerHTML;
@@ -1580,8 +1580,16 @@
         // Remove the dev-console HTML from the output
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
-        doc.getElementById('dev-console').remove();
-        currentCleanHtml = doc.documentElement.outerHTML;
+        const parsedDevConsole = doc.getElementById('dev-console');
+        if (parsedDevConsole) {
+            parsedDevConsole.remove();
+        }
+        return doc.documentElement.outerHTML;
+    };
+    
+    const handleElementViewer = () => {
+        const elementsContainer = document.querySelector('.elements-container');
+        currentCleanHtml = getCleanHtml();
         
         // Display the HTML as-is
         elementsContainer.textContent = currentCleanHtml;
@@ -1591,10 +1599,9 @@
     
     // Copy HTML functionality
     const handleCopyHtml = () => {
-        if (!currentCleanHtml) {
-            handleElementViewer();
-        }
-        copyToClipboard(currentCleanHtml);
+        // Get fresh clean HTML and copy it without displaying
+        const cleanHtml = getCleanHtml();
+        copyToClipboard(cleanHtml);
     };
     addTrackedEventListener(document.getElementById('copyHtml'), 'click', handleCopyHtml);
 
