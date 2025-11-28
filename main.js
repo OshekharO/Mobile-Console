@@ -320,7 +320,6 @@
     // Console functionality
     const consoleOutput = document.querySelector(".console-output");
     const consoleInput = document.getElementById("consoleInput");
-    let consoleEntryCount = 0;
 
     const log = (message, type = "log") => {
         // Memory management: remove oldest entries if over limit
@@ -368,12 +367,10 @@
         
         consoleOutput.appendChild(line);
         consoleOutput.scrollTop = consoleOutput.scrollHeight;
-        consoleEntryCount++;
     };
 
     const clearConsole = () => {
         consoleOutput.innerHTML = "";
-        consoleEntryCount = 0;
         log("Console cleared", "info");
     };
 
@@ -444,14 +441,6 @@
         networkLog.push(entry);
         updateNetworkDisplay();
     };
-    
-    // Helper to safely escape HTML for display
-    const escapeHtml = (str) => {
-        if (str === null || str === undefined) return '';
-        const div = document.createElement('div');
-        div.textContent = String(str);
-        return div.innerHTML;
-    };
 
     const updateNetworkDisplay = () => {
         networkContainer.innerHTML = '';
@@ -467,14 +456,23 @@
             urlSpan.textContent = entry.url;
             header.appendChild(urlSpan);
             
+            // Create details elements safely using textContent
             const details = document.createElement('div');
             details.className = 'network-item-details';
-            details.innerHTML = `
-                <div>Status: ${escapeHtml(entry.status)}</div>
-                <div>Method: ${escapeHtml(entry.method)}</div>
-                <div>Type: ${escapeHtml(entry.type)}</div>
-                <div>Time: ${escapeHtml(entry.time)}ms</div>
-            `;
+            
+            const statusDiv = document.createElement('div');
+            statusDiv.textContent = `Status: ${entry.status}`;
+            const methodDiv = document.createElement('div');
+            methodDiv.textContent = `Method: ${entry.method}`;
+            const typeDiv = document.createElement('div');
+            typeDiv.textContent = `Type: ${entry.type}`;
+            const timeDiv = document.createElement('div');
+            timeDiv.textContent = `Time: ${entry.time}ms`;
+            
+            details.appendChild(statusDiv);
+            details.appendChild(methodDiv);
+            details.appendChild(typeDiv);
+            details.appendChild(timeDiv);
             
             item.appendChild(header);
             item.appendChild(details);
@@ -527,7 +525,12 @@ ${entry.responseBody}`;
     
     const formatHeaders = (headers) => {
         if (!headers || typeof headers !== 'object') return '';
-        return Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\n');
+        return Object.entries(headers).map(([key, value]) => {
+            // Safely convert to string to handle any type of value
+            const safeKey = String(key);
+            const safeValue = String(value);
+            return `${safeKey}: ${safeValue}`;
+        }).join('\n');
     };
 
     const clearNetworkLog = () => {
