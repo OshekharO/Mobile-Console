@@ -9,6 +9,8 @@ A lightweight, in-browser developer console designed specifically for mobile web
 - View console logs (log, error, warn, info) with color-coded badges
 - Filter logs by type (All, Log, Error, Warn, Info) or search by text
 - Command history navigation with ↑/↓ arrow keys
+- **Auto-completion** for JavaScript keywords, methods, and properties (Tab key)
+- **Export logs** as JSON for sharing or debugging
 - Copy individual log entries to clipboard
 - Clear console with one click
 
@@ -30,6 +32,13 @@ A lightweight, in-browser developer console designed specifically for mobile web
 - Switch between storage types with tabs
 - JSON values are automatically formatted
 
+### Cookies Tab *(New!)*
+- View all cookies for the current domain
+- Filter cookies by name or value
+- Add, edit, and delete individual cookies
+- Clear all cookies with one click
+- Automatic JSON formatting for cookie values
+
 ### Info Tab
 - **Device Info**: User agent, platform, language, screen size, viewport, orientation
 - **Performance Metrics**: Page load time, DOM ready, first paint, DNS lookup, TCP connection, response time
@@ -40,6 +49,16 @@ A lightweight, in-browser developer console designed specifically for mobile web
 - 📐 **Resizable**: Drag the top handle to resize the console height
 - ➖ **Minimize**: Collapse the console to a minimal navigation bar
 - 🍪 **Quick Actions**: Clear cookies, clear storage, reload page
+
+### ⌨️ Keyboard Shortcuts
+| Shortcut | Action |
+|----------|--------|
+| `Escape` | Minimize console |
+| `Ctrl/Cmd + K` | Clear console |
+| `Ctrl/Cmd + Shift + C` | Toggle console visibility |
+| `Ctrl/Cmd + Shift + E` | Export logs |
+| `Tab` | Autocomplete suggestions (in console input) |
+| `↑/↓` | Navigate command history / autocomplete |
 
 ## 🚀 Usage
 
@@ -60,9 +79,11 @@ javascript:(function(){var script=document.createElement('script');script.src='h
 
 ### Tips
 - Use ↑ and ↓ arrow keys to navigate through command history
+- Press Tab to show autocomplete suggestions while typing JavaScript
 - Drag the handle at the top of the console to resize
 - Click the minimize button (−) to collapse the console
 - Click the theme toggle (◐) to switch between light and dark modes
+- Use the Export button to save logs for later analysis or sharing
 
 ## 🎨 Customization
 
