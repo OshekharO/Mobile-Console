@@ -1191,6 +1191,15 @@
         
         /* Modal dialog styles */
         .dev-console-modal-overlay {
+            --modal-bg: ${vars.bg};
+            --modal-bg-secondary: ${vars.bgSecondary};
+            --modal-bg-tertiary: ${vars.bgTertiary};
+            --modal-text: ${vars.text};
+            --modal-text-secondary: ${vars.textSecondary};
+            --modal-border: ${vars.border};
+            --modal-accent: ${vars.accent};
+            --modal-accent-light: ${vars.accentLight};
+            --modal-error: ${vars.error};
             position: fixed;
             top: 0;
             left: 0;
@@ -1202,33 +1211,35 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
+            box-sizing: border-box;
         }
         .dev-console-modal {
-            background: var(--bg);
+            background: var(--modal-bg);
             border-radius: 12px;
             padding: 20px;
             max-width: 400px;
             width: 100%;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            box-sizing: border-box;
         }
         .dev-console-modal h3 {
             margin: 0 0 15px 0;
-            color: var(--text);
+            color: var(--modal-text);
             font-size: 16px;
         }
         .dev-console-modal p {
             margin: 0 0 15px 0;
-            color: var(--text-secondary);
+            color: var(--modal-text-secondary);
             font-size: 13px;
         }
         .dev-console-modal input,
         .dev-console-modal textarea {
             width: 100%;
             padding: 10px 12px;
-            border: 1px solid var(--border);
+            border: 1px solid var(--modal-border);
             border-radius: 8px;
-            background: var(--bg-secondary);
-            color: var(--text);
+            background: var(--modal-bg-secondary);
+            color: var(--modal-text);
             font-size: 13px;
             margin-bottom: 15px;
             box-sizing: border-box;
@@ -1241,7 +1252,7 @@
         .dev-console-modal input:focus,
         .dev-console-modal textarea:focus {
             outline: none;
-            border-color: var(--accent);
+            border-color: var(--modal-accent);
         }
         .dev-console-modal-buttons {
             display: flex;
@@ -1250,29 +1261,29 @@
         }
         .dev-console-modal-btn {
             padding: 8px 16px;
-            border: 1px solid var(--border);
+            border: 1px solid var(--modal-border);
             border-radius: 6px;
-            background: var(--bg-secondary);
-            color: var(--text);
+            background: var(--modal-bg-secondary);
+            color: var(--modal-text);
             font-size: 13px;
             cursor: pointer;
             transition: all 0.15s;
         }
         .dev-console-modal-btn:hover {
-            background: var(--bg-tertiary);
+            background: var(--modal-bg-tertiary);
         }
         .dev-console-modal-btn.primary {
-            background: var(--accent);
+            background: var(--modal-accent);
             color: white;
-            border-color: var(--accent);
+            border-color: var(--modal-accent);
         }
         .dev-console-modal-btn.primary:hover {
-            background: var(--accent-light);
+            background: var(--modal-accent-light);
         }
         .dev-console-modal-btn.danger {
-            background: var(--error);
+            background: var(--modal-error);
             color: white;
-            border-color: var(--error);
+            border-color: var(--modal-error);
         }
         .dev-console-modal-btn.danger:hover {
             opacity: 0.9;
@@ -1592,6 +1603,7 @@
     let selectedElement = null;
     let inspectorOverlay = null;
     let inspectorLabel = null;
+    let wasMinimizedBeforeSelection = false;
     
     const selectElementBtn = document.getElementById('selectElement');
     const elementBreadcrumb = document.getElementById('elementBreadcrumb');
@@ -1725,6 +1737,13 @@
         selectElementBtn.classList.add('active');
         selectElementBtn.innerHTML = '❌ Cancel';
         
+        // Minimize the console to allow selecting elements at the bottom
+        const consoleEl = document.getElementById('dev-console');
+        wasMinimizedBeforeSelection = consoleEl.classList.contains('minimized');
+        if (!wasMinimizedBeforeSelection) {
+            consoleEl.classList.add('minimized');
+        }
+        
         addTrackedEventListener(document, 'mousemove', handleMouseMove);
         addTrackedEventListener(document, 'touchmove', handleTouchMove);
         addTrackedEventListener(document, 'click', handleElementClick, true);
@@ -1740,6 +1759,12 @@
         selectElementBtn.innerHTML = '🎯 Select Element';
         hideInspectorOverlay();
         removeInspectorElements();
+        
+        // Restore the console state if it wasn't minimized before
+        const consoleEl = document.getElementById('dev-console');
+        if (!wasMinimizedBeforeSelection) {
+            consoleEl.classList.remove('minimized');
+        }
         
         removeTrackedEventListener(document, 'mousemove', handleMouseMove);
         removeTrackedEventListener(document, 'touchmove', handleTouchMove);
