@@ -11,6 +11,7 @@
     const MAX_CONSOLE_ENTRIES = 500;
     const MIN_CONSOLE_HEIGHT = 100;
     const MAX_CONSOLE_HEIGHT_PERCENT = 90;
+    const AUTOCOMPLETE_BLUR_DELAY_MS = 150; // Delay to allow click on autocomplete items before hiding
     
     // Console command history
     const commandHistory = [];
@@ -1711,7 +1712,6 @@
     const getAutocompleteItems = (input) => {
         if (!input || input.length < 2) return [];
         
-        const lowerInput = input.toLowerCase();
         const lastWord = input.split(/[\s()\[\]{};,]+/).pop().toLowerCase();
         if (!lastWord || lastWord.length < 2) return [];
         
@@ -1827,7 +1827,7 @@
     
     addTrackedEventListener(consoleInput, 'blur', () => {
         // Delay to allow click on autocomplete item
-        setTimeout(hideAutocomplete, 150);
+        setTimeout(hideAutocomplete, AUTOCOMPLETE_BLUR_DELAY_MS);
     });
 
     // Export logs functionality
@@ -2896,6 +2896,24 @@ ${entry.responseBody}`;
         return cookies;
     };
     
+    // Helper function to clear a cookie with multiple path attempts
+    const clearCookie = (cookieName) => {
+        const paths = ['/', '', window.location.pathname];
+        const domain = window.location.hostname;
+        const expiry = new Date(0).toUTCString();
+        
+        paths.forEach(path => {
+            // Try without domain
+            document.cookie = `${cookieName}=;expires=${expiry};path=${path}`;
+            // Try with domain
+            document.cookie = `${cookieName}=;expires=${expiry};path=${path};domain=${domain}`;
+            // Try with domain starting with dot (for subdomains)
+            if (domain.indexOf('.') !== -1) {
+                document.cookie = `${cookieName}=;expires=${expiry};path=${path};domain=.${domain}`;
+            }
+        });
+    };
+    
     const updateCookiesDisplay = () => {
         const cookies = parseCookies();
         cookiesContainer.innerHTML = '';
@@ -2946,7 +2964,7 @@ ${entry.responseBody}`;
             deleteBtn.addEventListener('click', async () => {
                 const confirmed = await showConfirm('Delete Cookie', `Are you sure you want to delete "${cookie.name}"?`, true);
                 if (confirmed) {
-                    document.cookie = `${cookie.name}=;expires=${new Date(0).toUTCString()};path=/`;
+                    clearCookie(cookie.name);
                     updateCookiesDisplay();
                     log(`Deleted cookie "${cookie.name}"`, 'info');
                 }
@@ -3007,7 +3025,10 @@ ${entry.responseBody}`;
         const confirmed = await showConfirm('Clear All Cookies', 'Are you sure you want to delete all cookies?', true);
         if (confirmed) {
             document.cookie.split(";").forEach((cookie) => {
-                document.cookie = cookie.replace(/^ +/, "").replace(/=.*/, `=;expires=${new Date(0).toUTCString()};path=/`);
+                const cookieName = cookie.split('=')[0].trim();
+                if (cookieName) {
+                    clearCookie(cookieName);
+                }
             });
             updateCookiesDisplay();
             log('All cookies cleared', 'info');
