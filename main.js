@@ -1591,8 +1591,17 @@
         const elementsContainer = document.querySelector('.elements-container');
         currentCleanHtml = getCleanHtml();
         
+        // Hide element inspector panels when viewing HTML
+        const breadcrumb = document.getElementById('elementBreadcrumb');
+        const details = document.getElementById('elementDetails');
+        if (breadcrumb) breadcrumb.classList.add('hidden');
+        if (details) details.classList.add('hidden');
+        selectedElement = null;
+        
         // Display the HTML as-is
-        elementsContainer.textContent = currentCleanHtml;
+        if (elementsContainer) {
+            elementsContainer.textContent = currentCleanHtml;
+        }
         log('Page HTML loaded in the Elements tab.', 'info');
     };
     addTrackedEventListener(document.getElementById('elementViewer'), 'click', handleElementViewer);
@@ -1973,6 +1982,12 @@
     // Select and display element
     const selectElement = (element) => {
         selectedElement = element;
+        
+        // Clear HTML view when selecting an element
+        const elementsContainer = document.querySelector('.elements-container');
+        if (elementsContainer) {
+            elementsContainer.textContent = '';
+        }
         
         // Build breadcrumb
         buildBreadcrumb(element);
