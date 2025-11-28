@@ -11,6 +11,9 @@
     const MAX_CONSOLE_ENTRIES = 500;
     const MIN_CONSOLE_HEIGHT = 100;
     const MAX_CONSOLE_HEIGHT_PERCENT = 90;
+    const AUTOCOMPLETE_BLUR_DELAY_MS = 150; // Delay to allow click on autocomplete items before hiding
+    const MIN_AUTOCOMPLETE_LENGTH = 2; // Minimum characters needed to trigger autocomplete
+    const MAX_AUTOCOMPLETE_RESULTS = 10; // Maximum number of autocomplete suggestions
     
     // Console command history
     const commandHistory = [];
@@ -67,6 +70,9 @@
                 <button class="dev-console-nav-button" id="navStorage" title="Storage">
                     <span class="nav-icon">▤</span><span class="nav-text">Storage</span>
                 </button>
+                <button class="dev-console-nav-button" id="navCookies" title="Cookies">
+                    <span class="nav-icon">🍪</span><span class="nav-text">Cookies</span>
+                </button>
                 <button class="dev-console-nav-button" id="navInfo" title="Info">
                     <span class="nav-icon">ⓘ</span><span class="nav-text">Info</span>
                 </button>
@@ -95,7 +101,9 @@
                     <div class="console-output"></div>
                     <div class="console-input-wrapper">
                         <button id="clearConsole" class="action-btn">🗑 Clear</button>
-                        <textarea id="consoleInput" placeholder="Enter JavaScript... (↑↓ for history)"></textarea>
+                        <button id="exportLogs" class="action-btn">📤 Export</button>
+                        <textarea id="consoleInput" placeholder="Enter JavaScript... (↑↓ for history, Tab for autocomplete)"></textarea>
+                        <div id="autocompleteList" class="autocomplete-list hidden"></div>
                     </div>
                 </div>
                 <div id="sectionElements" class="dev-console-section hidden">
@@ -158,6 +166,15 @@
                         <button id="refreshStorage" class="action-btn">🔄 Refresh</button>
                     </div>
                     <div class="storage-container"></div>
+                </div>
+                <div id="sectionCookies" class="dev-console-section hidden">
+                    <div class="cookies-controls">
+                        <input type="text" id="cookieFilter" placeholder="Filter cookies..." class="cookie-filter-input" />
+                        <button id="refreshCookies" class="action-btn">🔄 Refresh</button>
+                        <button id="addCookie" class="action-btn">➕ Add</button>
+                        <button id="clearAllCookies" class="action-btn danger">🗑 Clear All</button>
+                    </div>
+                    <div class="cookies-container"></div>
                 </div>
                 <div id="sectionInfo" class="dev-console-section hidden">
                     <div class="info-tabs">
@@ -471,6 +488,8 @@
             gap: 8px;
             align-items: flex-end;
             background: var(--bg-secondary);
+            position: relative;
+            flex-wrap: wrap;
         }
         #consoleInput {
             flex: 1;
@@ -487,10 +506,55 @@
             resize: none;
             outline: none;
             transition: border-color 0.15s;
+            min-width: 150px;
         }
         #consoleInput:focus {
             border-color: var(--accent);
         }
+        
+        /* Autocomplete styles */
+        .autocomplete-list {
+            position: absolute;
+            bottom: 100%;
+            left: 10px;
+            right: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 -4px 12px var(--shadow);
+            z-index: 10002;
+            margin-bottom: 5px;
+        }
+        .autocomplete-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-size: 12px;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+        .autocomplete-item:hover,
+        .autocomplete-item.selected {
+            background: var(--bg-tertiary);
+        }
+        .autocomplete-item .type {
+            font-size: 9px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+        }
+        .autocomplete-item .type.keyword { background: #dbeafe; color: var(--accent); }
+        .autocomplete-item .type.method { background: #d1fae5; color: var(--success); }
+        .autocomplete-item .type.property { background: #fef3c7; color: var(--warning); }
         
         /* Action buttons */
         .action-btn {
@@ -535,6 +599,7 @@
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
             -ms-overflow-style: none;
+            flex-shrink: 0;
         }
         .elements-controls::-webkit-scrollbar,
         .network-controls::-webkit-scrollbar,
@@ -610,6 +675,108 @@
             text-align: center;
             padding: 40px;
             color: var(--text-secondary);
+        }
+        
+        /* Cookies styles */
+        .cookies-controls {
+            display: flex;
+            padding: 6px 8px;
+            gap: 6px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .cookies-controls::-webkit-scrollbar {
+            display: none;
+        }
+        .cookie-filter-input {
+            flex: 1;
+            min-width: 100px;
+            padding: 5px 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 11px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .cookie-filter-input:focus {
+            border-color: var(--accent);
+        }
+        .cookies-container {
+            padding: 10px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .cookie-item {
+            display: flex;
+            flex-direction: column;
+            padding: 10px 12px;
+            margin: 4px 0;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            gap: 6px;
+        }
+        .cookie-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .cookie-item .name {
+            font-weight: 600;
+            color: var(--accent);
+            word-break: break-all;
+        }
+        .cookie-item .value {
+            color: var(--text);
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 11px;
+            background: var(--bg);
+            padding: 6px 8px;
+            border-radius: 4px;
+        }
+        .cookie-item .meta {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+        .cookie-item .meta span {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .cookie-item .actions {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .cookie-item .edit-btn,
+        .cookie-item .delete-btn {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .cookie-item .edit-btn {
+            background: var(--bg-tertiary);
+            color: var(--text);
+        }
+        .cookie-item .edit-btn:hover {
+            background: var(--accent);
+            color: white;
+        }
+        .cookie-item .delete-btn {
+            background: var(--error);
+            color: white;
         }
         
         /* Info tabs */
@@ -1512,7 +1679,223 @@
 
     addTrackedEventListener(document.getElementById("clearConsole"), "click", clearConsole);
 
+    // Autocomplete functionality
+    const autocompleteList = document.getElementById('autocompleteList');
+    let autocompleteIndex = -1;
+    let autocompleteItems = [];
+    
+    // JavaScript keywords and common methods for autocomplete
+    const jsKeywords = [
+        'async', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue',
+        'debugger', 'default', 'delete', 'do', 'else', 'export', 'extends', 'false',
+        'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof', 'let',
+        'new', 'null', 'return', 'static', 'super', 'switch', 'this', 'throw',
+        'true', 'try', 'typeof', 'undefined', 'var', 'void', 'while', 'with', 'yield'
+    ];
+    
+    const commonMethods = [
+        'console.log', 'console.error', 'console.warn', 'console.info', 'console.table',
+        'document.getElementById', 'document.querySelector', 'document.querySelectorAll',
+        'document.createElement', 'document.body', 'document.head',
+        'window.location', 'window.navigator', 'window.localStorage', 'window.sessionStorage',
+        'JSON.parse', 'JSON.stringify', 'Object.keys', 'Object.values', 'Object.entries',
+        'Array.from', 'Array.isArray', 'Math.random', 'Math.floor', 'Math.ceil', 'Math.round',
+        'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'fetch',
+        'addEventListener', 'removeEventListener', 'getAttribute', 'setAttribute',
+        'querySelector', 'querySelectorAll', 'appendChild', 'removeChild', 'innerHTML',
+        'textContent', 'classList', 'style', 'forEach', 'map', 'filter', 'reduce', 'find'
+    ];
+    
+    const commonProperties = [
+        'length', 'prototype', 'constructor', 'name', 'value', 'id', 'className',
+        'parentNode', 'childNodes', 'firstChild', 'lastChild', 'nextSibling', 'previousSibling',
+        'innerWidth', 'innerHeight', 'outerWidth', 'outerHeight', 'scrollX', 'scrollY'
+    ];
+    
+    const getAutocompleteItems = (input) => {
+        if (!input || input.length < MIN_AUTOCOMPLETE_LENGTH) return [];
+        
+        const lastWord = input.split(/[\s()\[\]{};,]+/).pop().toLowerCase();
+        if (!lastWord || lastWord.length < MIN_AUTOCOMPLETE_LENGTH) return [];
+        
+        const items = [];
+        
+        // Filter keywords
+        jsKeywords.forEach(kw => {
+            if (kw.toLowerCase().startsWith(lastWord)) {
+                items.push({ text: kw, type: 'keyword' });
+            }
+        });
+        
+        // Filter methods
+        commonMethods.forEach(method => {
+            if (method.toLowerCase().includes(lastWord)) {
+                items.push({ text: method, type: 'method' });
+            }
+        });
+        
+        // Filter properties
+        commonProperties.forEach(prop => {
+            if (prop.toLowerCase().startsWith(lastWord)) {
+                items.push({ text: prop, type: 'property' });
+            }
+        });
+        
+        // Also include command history items
+        commandHistory.forEach(cmd => {
+            if (cmd.toLowerCase().includes(lastWord) && cmd !== input) {
+                items.push({ text: cmd, type: 'history' });
+            }
+        });
+        
+        // Limit and sort by relevance
+        return items.slice(0, MAX_AUTOCOMPLETE_RESULTS).sort((a, b) => {
+            // Prioritize items that start with the input
+            const aStarts = a.text.toLowerCase().startsWith(lastWord);
+            const bStarts = b.text.toLowerCase().startsWith(lastWord);
+            if (aStarts && !bStarts) return -1;
+            if (!aStarts && bStarts) return 1;
+            return a.text.length - b.text.length;
+        });
+    };
+    
+    const showAutocomplete = (items) => {
+        if (items.length === 0) {
+            hideAutocomplete();
+            return;
+        }
+        
+        autocompleteItems = items;
+        autocompleteIndex = -1;
+        autocompleteList.innerHTML = '';
+        
+        items.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            
+            const typeSpan = document.createElement('span');
+            typeSpan.className = `type ${item.type}`;
+            typeSpan.textContent = item.type;
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = item.text;
+            
+            div.appendChild(typeSpan);
+            div.appendChild(textSpan);
+            
+            div.addEventListener('click', () => {
+                insertAutocomplete(item.text);
+            });
+            
+            autocompleteList.appendChild(div);
+        });
+        
+        autocompleteList.classList.remove('hidden');
+    };
+    
+    const hideAutocomplete = () => {
+        autocompleteList.classList.add('hidden');
+        autocompleteItems = [];
+        autocompleteIndex = -1;
+    };
+    
+    const insertAutocomplete = (text) => {
+        const input = consoleInput.value;
+        const words = input.split(/[\s()\[\]{};,]+/);
+        const lastWord = words.pop();
+        
+        // Replace the last word with the selected autocomplete text
+        const prefix = input.slice(0, input.length - lastWord.length);
+        consoleInput.value = prefix + text;
+        consoleInput.focus();
+        hideAutocomplete();
+    };
+    
+    const updateAutocompleteSelection = () => {
+        const items = autocompleteList.querySelectorAll('.autocomplete-item');
+        items.forEach((item, index) => {
+            item.classList.toggle('selected', index === autocompleteIndex);
+        });
+        
+        // Scroll selected item into view
+        if (autocompleteIndex >= 0 && items[autocompleteIndex]) {
+            items[autocompleteIndex].scrollIntoView({ block: 'nearest' });
+        }
+    };
+    
+    addTrackedEventListener(consoleInput, 'input', () => {
+        const items = getAutocompleteItems(consoleInput.value);
+        showAutocomplete(items);
+    });
+    
+    addTrackedEventListener(consoleInput, 'blur', () => {
+        // Delay to allow click on autocomplete item
+        setTimeout(hideAutocomplete, AUTOCOMPLETE_BLUR_DELAY_MS);
+    });
+
+    // Export logs functionality
+    const exportLogs = () => {
+        const entries = consoleOutput.querySelectorAll('.console-entry');
+        const logs = [];
+        
+        entries.forEach(entry => {
+            logs.push({
+                timestamp: entry.querySelector('.timestamp')?.textContent || '',
+                type: entry.dataset.type || 'log',
+                message: entry.querySelector('.message')?.textContent || ''
+            });
+        });
+        
+        const exportData = {
+            exported: new Date().toISOString(),
+            url: window.location.href,
+            userAgent: navigator.userAgent,
+            logs: logs,
+            networkLog: networkLog
+        };
+        
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `console-logs-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        log('Logs exported successfully', 'info');
+        showToast('Logs exported!');
+    };
+    
+    addTrackedEventListener(document.getElementById('exportLogs'), 'click', exportLogs);
+
     const handleConsoleInput = (e) => {
+        // Handle autocomplete navigation
+        if (!autocompleteList.classList.contains('hidden')) {
+            if (e.key === 'Tab' || (e.key === 'ArrowDown' && autocompleteItems.length > 0)) {
+                e.preventDefault();
+                autocompleteIndex = (autocompleteIndex + 1) % autocompleteItems.length;
+                updateAutocompleteSelection();
+                return;
+            }
+            if (e.key === 'ArrowUp' && autocompleteItems.length > 0) {
+                e.preventDefault();
+                autocompleteIndex = autocompleteIndex <= 0 ? autocompleteItems.length - 1 : autocompleteIndex - 1;
+                updateAutocompleteSelection();
+                return;
+            }
+            if (e.key === 'Enter' && autocompleteIndex >= 0) {
+                e.preventDefault();
+                insertAutocomplete(autocompleteItems[autocompleteIndex].text);
+                return;
+            }
+            if (e.key === 'Escape') {
+                hideAutocomplete();
+                return;
+            }
+        }
+        
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             const code = consoleInput.value.trim();
@@ -2494,6 +2877,171 @@ ${entry.responseBody}`;
     // Initialize storage display when tab is clicked
     addTrackedEventListener(document.getElementById('navStorage'), 'click', updateStorageDisplay);
 
+    // Cookies Viewer functionality
+    const cookiesContainer = document.querySelector('.cookies-container');
+    let cookieFilterText = '';
+    
+    // Parse cookies into an array of objects
+    const parseCookies = () => {
+        const cookies = [];
+        if (!document.cookie) return cookies;
+        
+        document.cookie.split(';').forEach(cookie => {
+            const [name, ...valueParts] = cookie.trim().split('=');
+            if (name) {
+                cookies.push({
+                    name: name.trim(),
+                    value: valueParts.join('=') || ''
+                });
+            }
+        });
+        
+        return cookies;
+    };
+    
+    // Helper function to clear a cookie with multiple path attempts
+    const clearCookie = (cookieName) => {
+        const paths = ['/', '', window.location.pathname];
+        const domain = window.location.hostname;
+        const expiry = new Date(0).toUTCString();
+        
+        paths.forEach(path => {
+            // Try without domain
+            document.cookie = `${cookieName}=;expires=${expiry};path=${path}`;
+            // Try with domain
+            document.cookie = `${cookieName}=;expires=${expiry};path=${path};domain=${domain}`;
+            // Try with domain starting with dot (for subdomains)
+            if (domain.indexOf('.') !== -1) {
+                document.cookie = `${cookieName}=;expires=${expiry};path=${path};domain=.${domain}`;
+            }
+        });
+    };
+    
+    const updateCookiesDisplay = () => {
+        const cookies = parseCookies();
+        cookiesContainer.innerHTML = '';
+        
+        const filteredCookies = cookies.filter(cookie => {
+            if (!cookieFilterText) return true;
+            return cookie.name.toLowerCase().includes(cookieFilterText.toLowerCase()) ||
+                   cookie.value.toLowerCase().includes(cookieFilterText.toLowerCase());
+        });
+        
+        if (filteredCookies.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'storage-empty';
+            empty.textContent = cookies.length === 0 ? 'No cookies found' : 'No matching cookies';
+            cookiesContainer.appendChild(empty);
+            return;
+        }
+        
+        filteredCookies.forEach(cookie => {
+            const item = document.createElement('div');
+            item.className = 'cookie-item';
+            
+            const header = document.createElement('div');
+            header.className = 'cookie-item-header';
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'name';
+            nameSpan.textContent = cookie.name;
+            
+            const actions = document.createElement('div');
+            actions.className = 'actions';
+            
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-btn';
+            editBtn.textContent = '✏️ Edit';
+            editBtn.addEventListener('click', async () => {
+                const newValue = await showPrompt(`Edit Cookie: ${cookie.name}`, cookie.value, 'Enter new value...');
+                if (newValue !== null) {
+                    document.cookie = `${cookie.name}=${newValue};path=/`;
+                    updateCookiesDisplay();
+                    log(`Updated cookie "${cookie.name}"`, 'info');
+                }
+            });
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.textContent = '🗑';
+            deleteBtn.addEventListener('click', async () => {
+                const confirmed = await showConfirm('Delete Cookie', `Are you sure you want to delete "${cookie.name}"?`, true);
+                if (confirmed) {
+                    clearCookie(cookie.name);
+                    updateCookiesDisplay();
+                    log(`Deleted cookie "${cookie.name}"`, 'info');
+                }
+            });
+            
+            actions.appendChild(editBtn);
+            actions.appendChild(deleteBtn);
+            header.appendChild(nameSpan);
+            header.appendChild(actions);
+            
+            const valueSpan = document.createElement('div');
+            valueSpan.className = 'value';
+            // Try to decode and format the value
+            try {
+                const decoded = decodeURIComponent(cookie.value);
+                try {
+                    const parsed = JSON.parse(decoded);
+                    valueSpan.textContent = safeStringify(parsed);
+                } catch {
+                    valueSpan.textContent = decoded;
+                }
+            } catch {
+                valueSpan.textContent = cookie.value;
+            }
+            
+            item.appendChild(header);
+            item.appendChild(valueSpan);
+            cookiesContainer.appendChild(item);
+        });
+    };
+    
+    // Cookie filter
+    const cookieFilterInput = document.getElementById('cookieFilter');
+    addTrackedEventListener(cookieFilterInput, 'input', (e) => {
+        cookieFilterText = e.target.value;
+        updateCookiesDisplay();
+    });
+    
+    // Refresh cookies button
+    addTrackedEventListener(document.getElementById('refreshCookies'), 'click', updateCookiesDisplay);
+    
+    // Add cookie button
+    addTrackedEventListener(document.getElementById('addCookie'), 'click', async () => {
+        const name = await showPrompt('Add Cookie - Name', '', 'Enter cookie name...');
+        if (!name) return;
+        
+        const value = await showPrompt('Add Cookie - Value', '', 'Enter cookie value...');
+        if (value === null) return;
+        
+        document.cookie = `${name}=${encodeURIComponent(value)};path=/`;
+        updateCookiesDisplay();
+        log(`Added cookie "${name}"`, 'info');
+        showToast('Cookie added!');
+    });
+    
+    // Clear all cookies button
+    addTrackedEventListener(document.getElementById('clearAllCookies'), 'click', async () => {
+        const confirmed = await showConfirm('Clear All Cookies', 'Are you sure you want to delete all cookies?', true);
+        if (confirmed) {
+            document.cookie.split(";").forEach((cookie) => {
+                const cookieName = cookie.split('=')[0].trim();
+                if (cookieName) {
+                    clearCookie(cookieName);
+                }
+            });
+            updateCookiesDisplay();
+            log('All cookies cleared', 'info');
+            showToast('All cookies cleared!');
+        }
+    });
+    
+    // Initialize cookies display when tab is clicked
+    addTrackedEventListener(document.getElementById('navCookies'), 'click', updateCookiesDisplay);
+
     // Info tab navigation
     const infoPanels = document.querySelectorAll('.info-panel');
     document.querySelectorAll('.info-tab-btn').forEach(btn => {
@@ -2510,7 +3058,7 @@ ${entry.responseBody}`;
     aboutInfo.innerHTML = `
         <div class="about-logo">🛠️</div>
         <div class="about-title">Mobile Dev Console</div>
-        <div class="about-version">v2.0.0</div>
+        <div class="about-version">v2.1.0</div>
         <p style="color: var(--text-secondary); margin: 10px 0;">A lightweight in-browser developer console for mobile web debugging</p>
         <p style="color: var(--text); margin: 10px 0;">Created by <strong>Saksham Shekher</strong></p>
         <div class="about-links">
@@ -2760,6 +3308,44 @@ ${entry.responseBody}`;
 
     addTrackedEventListener(minimizeButton, 'click', toggleConsole);
     
-    log("Mobile Dev Console v2.0 initialized", "info");
-    log("Drag the top handle to resize • Use ↑↓ keys for command history", "info");
+    // Global keyboard shortcuts
+    const handleGlobalKeydown = (e) => {
+        // Don't handle shortcuts if user is typing in an input
+        const activeEl = document.activeElement;
+        const isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+        
+        // Escape key - minimize console
+        if (e.key === 'Escape' && !isTyping) {
+            if (!isMinimized) {
+                toggleConsole();
+            }
+            return;
+        }
+        
+        // Ctrl/Cmd + K - clear console
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            clearConsole();
+            return;
+        }
+        
+        // Ctrl/Cmd + Shift + C - toggle console visibility
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
+            e.preventDefault();
+            toggleConsole();
+            return;
+        }
+        
+        // Ctrl/Cmd + Shift + E - export logs
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'E') {
+            e.preventDefault();
+            exportLogs();
+            return;
+        }
+    };
+    
+    addTrackedEventListener(document, 'keydown', handleGlobalKeydown);
+    
+    log("Mobile Dev Console v2.1.0 initialized", "info");
+    log("Shortcuts: Escape to minimize • Cmd/Ctrl+K to clear • Tab for autocomplete", "info");
 })();
