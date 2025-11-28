@@ -20,9 +20,20 @@
     const eventListeners = [];
     
     // Helper to add tracked event listeners
-    const addTrackedEventListener = (element, event, handler) => {
-        element.addEventListener(event, handler);
-        eventListeners.push({ element, event, handler });
+    const addTrackedEventListener = (element, event, handler, options) => {
+        element.addEventListener(event, handler, options);
+        eventListeners.push({ element, event, handler, options });
+    };
+    
+    // Helper to remove tracked event listeners
+    const removeTrackedEventListener = (element, event, handler, options) => {
+        element.removeEventListener(event, handler, options);
+        const index = eventListeners.findIndex(
+            l => l.element === element && l.event === event && l.handler === handler
+        );
+        if (index !== -1) {
+            eventListeners.splice(index, 1);
+        }
     };
     
     // Helper to safely stringify objects (handles circular references)
@@ -1177,6 +1188,95 @@
         .selecting-element * {
             cursor: crosshair !important;
         }
+        
+        /* Modal dialog styles */
+        .dev-console-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 10003;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .dev-console-modal {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 400px;
+            width: 100%;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+        .dev-console-modal h3 {
+            margin: 0 0 15px 0;
+            color: var(--text);
+            font-size: 16px;
+        }
+        .dev-console-modal p {
+            margin: 0 0 15px 0;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+        .dev-console-modal input,
+        .dev-console-modal textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            color: var(--text);
+            font-size: 13px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .dev-console-modal textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        .dev-console-modal input:focus,
+        .dev-console-modal textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .dev-console-modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .dev-console-modal-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .dev-console-modal-btn:hover {
+            background: var(--bg-tertiary);
+        }
+        .dev-console-modal-btn.primary {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .dev-console-modal-btn.primary:hover {
+            background: var(--accent-light);
+        }
+        .dev-console-modal-btn.danger {
+            background: var(--error);
+            color: white;
+            border-color: var(--error);
+        }
+        .dev-console-modal-btn.danger:hover {
+            opacity: 0.9;
+        }
     `;
     
     let consoleStyles = getConsoleStyles(themeVars);
@@ -1232,6 +1332,86 @@
             }
             document.body.removeChild(textarea);
         }
+    };
+
+    // Mobile-friendly modal dialogs
+    const showModal = (options) => {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'dev-console-modal-overlay';
+            
+            const modal = document.createElement('div');
+            modal.className = 'dev-console-modal';
+            
+            const title = document.createElement('h3');
+            title.textContent = options.title || 'Dialog';
+            modal.appendChild(title);
+            
+            if (options.message) {
+                const message = document.createElement('p');
+                message.textContent = options.message;
+                modal.appendChild(message);
+            }
+            
+            let inputEl = null;
+            if (options.input) {
+                inputEl = document.createElement(options.multiline ? 'textarea' : 'input');
+                inputEl.type = 'text';
+                inputEl.value = options.defaultValue || '';
+                inputEl.placeholder = options.placeholder || '';
+                modal.appendChild(inputEl);
+            }
+            
+            const buttons = document.createElement('div');
+            buttons.className = 'dev-console-modal-buttons';
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'dev-console-modal-btn';
+            cancelBtn.textContent = options.cancelText || 'Cancel';
+            cancelBtn.addEventListener('click', () => {
+                overlay.remove();
+                resolve(options.input ? null : false);
+            });
+            buttons.appendChild(cancelBtn);
+            
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = `dev-console-modal-btn ${options.danger ? 'danger' : 'primary'}`;
+            confirmBtn.textContent = options.confirmText || 'OK';
+            confirmBtn.addEventListener('click', () => {
+                overlay.remove();
+                resolve(options.input ? inputEl.value : true);
+            });
+            buttons.appendChild(confirmBtn);
+            
+            modal.appendChild(buttons);
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            
+            if (inputEl) {
+                inputEl.focus();
+                inputEl.select();
+            }
+        });
+    };
+    
+    const showPrompt = (title, defaultValue = '', placeholder = '') => {
+        return showModal({
+            title,
+            input: true,
+            multiline: true,
+            defaultValue,
+            placeholder,
+            confirmText: 'Save'
+        });
+    };
+    
+    const showConfirm = (title, message, danger = false) => {
+        return showModal({
+            title,
+            message,
+            danger,
+            confirmText: danger ? 'Delete' : 'Confirm'
+        });
     };
 
     const log = (message, type = "log") => {
@@ -1561,10 +1741,10 @@
         hideInspectorOverlay();
         removeInspectorElements();
         
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('touchmove', handleTouchMove);
-        document.removeEventListener('click', handleElementClick, true);
-        document.removeEventListener('touchend', handleTouchEnd);
+        removeTrackedEventListener(document, 'mousemove', handleMouseMove);
+        removeTrackedEventListener(document, 'touchmove', handleTouchMove);
+        removeTrackedEventListener(document, 'click', handleElementClick, true);
+        removeTrackedEventListener(document, 'touchend', handleTouchEnd);
     };
     
     const toggleSelectElement = () => {
@@ -1605,7 +1785,8 @@
                 item.classList.add('active');
             }
             item.textContent = getElementSelector(el);
-            item.addEventListener('click', () => selectElement(el));
+            const clickHandler = () => selectElement(el);
+            addTrackedEventListener(item, 'click', clickHandler);
             elementBreadcrumb.appendChild(item);
         });
     };
@@ -1838,11 +2019,11 @@
     });
     
     // Edit element text
-    addTrackedEventListener(document.getElementById('editElementText'), 'click', () => {
+    addTrackedEventListener(document.getElementById('editElementText'), 'click', async () => {
         if (!selectedElement) return;
         
         const currentText = selectedElement.textContent;
-        const newText = prompt('Edit element text content:', currentText);
+        const newText = await showPrompt('Edit Element Text', currentText, 'Enter new text content...');
         
         if (newText !== null) {
             selectedElement.textContent = newText;
@@ -1851,12 +2032,17 @@
     });
     
     // Delete element
-    addTrackedEventListener(document.getElementById('deleteElement'), 'click', () => {
+    addTrackedEventListener(document.getElementById('deleteElement'), 'click', async () => {
         if (!selectedElement) return;
         
         const selector = getElementSelector(selectedElement);
-        if (confirm(`Are you sure you want to delete <${selector}>?`)) {
-            const parent = selectedElement.parentNode;
+        const confirmed = await showConfirm(
+            'Delete Element',
+            `Are you sure you want to delete <${selector}>?`,
+            true
+        );
+        
+        if (confirmed) {
             selectedElement.remove();
             selectedElement = null;
             elementDetails.classList.add('hidden');
