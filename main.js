@@ -20,9 +20,20 @@
     const eventListeners = [];
     
     // Helper to add tracked event listeners
-    const addTrackedEventListener = (element, event, handler) => {
-        element.addEventListener(event, handler);
-        eventListeners.push({ element, event, handler });
+    const addTrackedEventListener = (element, event, handler, options) => {
+        element.addEventListener(event, handler, options);
+        eventListeners.push({ element, event, handler, options });
+    };
+    
+    // Helper to remove tracked event listeners
+    const removeTrackedEventListener = (element, event, handler, options) => {
+        element.removeEventListener(event, handler, options);
+        const index = eventListeners.findIndex(
+            l => l.element === element && l.event === event && l.handler === handler
+        );
+        if (index !== -1) {
+            eventListeners.splice(index, 1);
+        }
     };
     
     // Helper to safely stringify objects (handles circular references)
@@ -89,8 +100,46 @@
                 </div>
                 <div id="sectionElements" class="dev-console-section hidden">
                     <div class="elements-controls">
+                        <button id="selectElement" class="action-btn">🎯 Select Element</button>
                         <button id="elementViewer" class="action-btn">📄 View HTML</button>
                         <button id="copyHtml" class="action-btn">📋 Copy HTML</button>
+                    </div>
+                    <div id="elementBreadcrumb" class="element-breadcrumb hidden"></div>
+                    <div id="elementDetails" class="element-details hidden">
+                        <div class="element-details-header">
+                            <span id="elementTagName" class="element-tag-name"></span>
+                            <button id="closeElementDetails" class="close-details-btn">×</button>
+                        </div>
+                        <div class="element-details-tabs">
+                            <button class="element-tab-btn active" data-tab="attributes">Attributes</button>
+                            <button class="element-tab-btn" data-tab="styles">Styles</button>
+                            <button class="element-tab-btn" data-tab="computed">Computed</button>
+                        </div>
+                        <div id="attributesPanel" class="element-panel">
+                            <div id="elementAttributes" class="element-attributes"></div>
+                            <div class="add-attribute-wrapper">
+                                <input type="text" id="newAttrName" placeholder="Name" class="attr-input" />
+                                <input type="text" id="newAttrValue" placeholder="Value" class="attr-input" />
+                                <button id="addAttribute" class="action-btn small">+ Add</button>
+                            </div>
+                        </div>
+                        <div id="stylesPanel" class="element-panel hidden">
+                            <div id="elementStyles" class="element-styles"></div>
+                            <div class="add-style-wrapper">
+                                <input type="text" id="newStyleProp" placeholder="Property" class="style-input" />
+                                <input type="text" id="newStyleValue" placeholder="Value" class="style-input" />
+                                <button id="addStyle" class="action-btn small">+ Add</button>
+                            </div>
+                        </div>
+                        <div id="computedPanel" class="element-panel hidden">
+                            <input type="text" id="computedFilter" placeholder="Filter computed styles..." class="computed-filter-input" />
+                            <div id="computedStyles" class="computed-styles"></div>
+                        </div>
+                        <div class="element-actions">
+                            <button id="editElementText" class="action-btn">✏️ Edit Text</button>
+                            <button id="deleteElement" class="action-btn danger">🗑 Delete</button>
+                            <button id="copyElementHtml" class="action-btn">📋 Copy HTML</button>
+                        </div>
                     </div>
                     <div class="elements-container"></div>
                 </div>
@@ -297,23 +346,30 @@
         
         /* Console Filter */
         .console-filter-wrapper {
-            padding: 8px 10px;
+            padding: 6px 8px;
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border);
             display: flex;
-            gap: 8px;
+            gap: 6px;
             align-items: center;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .console-filter-wrapper::-webkit-scrollbar {
+            display: none;
         }
         .console-filter-input, .network-filter-input {
             flex: 1;
-            min-width: 120px;
-            padding: 6px 10px;
+            min-width: 100px;
+            padding: 5px 8px;
             border: 1px solid var(--border);
             border-radius: 6px;
             background: var(--bg);
             color: var(--text);
-            font-size: 12px;
+            font-size: 11px;
             outline: none;
             transition: border-color 0.15s;
         }
@@ -322,17 +378,19 @@
         }
         .console-filter-buttons {
             display: flex;
-            gap: 4px;
+            gap: 3px;
+            flex-shrink: 0;
         }
         .filter-btn {
-            padding: 4px 8px;
+            padding: 4px 6px;
             border: 1px solid var(--border);
             border-radius: 4px;
             background: var(--bg);
             color: var(--text-secondary);
-            font-size: 10px;
+            font-size: 9px;
             cursor: pointer;
             transition: all 0.15s;
+            white-space: nowrap;
         }
         .filter-btn:hover {
             background: var(--bg-tertiary);
@@ -436,18 +494,21 @@
         
         /* Action buttons */
         .action-btn {
-            padding: 8px 12px;
+            padding: 6px 10px;
             background: var(--bg);
             border: 1px solid var(--border);
             border-radius: 6px;
             cursor: pointer;
             color: var(--text);
-            font-size: 12px;
-            display: flex;
+            font-size: 11px;
+            display: inline-flex;
             align-items: center;
-            gap: 4px;
+            justify-content: center;
+            gap: 3px;
             transition: all 0.15s;
             white-space: nowrap;
+            flex-shrink: 0;
+            min-width: 0;
         }
         .action-btn:hover {
             background: var(--bg-tertiary);
@@ -456,26 +517,44 @@
         .action-btn:active {
             transform: scale(0.98);
         }
+        @media (max-width: 400px) {
+            .action-btn {
+                padding: 5px 8px;
+                font-size: 10px;
+            }
+        }
         
         .elements-controls, .network-controls, .info-controls, .storage-controls {
             display: flex;
-            padding: 8px 10px;
-            gap: 8px;
+            padding: 6px 8px;
+            gap: 6px;
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border);
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .elements-controls::-webkit-scrollbar,
+        .network-controls::-webkit-scrollbar,
+        .info-controls::-webkit-scrollbar,
+        .storage-controls::-webkit-scrollbar {
+            display: none;
         }
         
         /* Storage styles */
         .storage-tab-btn {
-            padding: 6px 12px;
+            padding: 5px 10px;
             border: 1px solid var(--border);
             border-radius: 6px;
             background: var(--bg);
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 11px;
             cursor: pointer;
             transition: all 0.15s;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
         .storage-tab-btn:hover {
             background: var(--bg-tertiary);
@@ -500,8 +579,10 @@
         .storage-item .key {
             font-weight: 600;
             color: var(--accent);
-            min-width: 100px;
+            min-width: 80px;
+            max-width: 120px;
             word-break: break-all;
+            flex-shrink: 0;
         }
         .storage-item .value {
             flex: 1;
@@ -509,10 +590,12 @@
             word-break: break-all;
             font-family: monospace;
             font-size: 11px;
+            min-width: 0;
         }
         .storage-item .actions {
             display: flex;
             gap: 4px;
+            flex-shrink: 0;
         }
         .storage-item .delete-btn {
             padding: 4px 8px;
@@ -533,19 +616,28 @@
         .info-tabs {
             display: flex;
             gap: 4px;
-            padding: 8px 10px;
+            padding: 6px 8px;
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .info-tabs::-webkit-scrollbar {
+            display: none;
         }
         .info-tab-btn {
-            padding: 6px 16px;
+            padding: 5px 12px;
             border: 1px solid var(--border);
             border-radius: 6px;
             background: var(--bg);
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 11px;
             cursor: pointer;
             transition: all 0.15s;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
         .info-tab-btn:hover {
             background: var(--bg-tertiary);
@@ -807,6 +899,384 @@
             85% { opacity: 1; }
             100% { opacity: 0; }
         }
+        
+        /* Element Inspector Styles */
+        .element-inspector-overlay {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9998;
+            border: 2px solid var(--accent);
+            background: rgba(59, 130, 246, 0.1);
+            transition: all 0.1s ease;
+        }
+        .element-inspector-label {
+            position: fixed;
+            z-index: 9999;
+            background: var(--accent);
+            color: white;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            border-radius: 4px;
+            pointer-events: none;
+            white-space: nowrap;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .element-breadcrumb {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 4px;
+            padding: 6px 8px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-size: 10px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .element-breadcrumb::-webkit-scrollbar {
+            display: none;
+        }
+        .breadcrumb-item {
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 2px 5px;
+            border-radius: 4px;
+            transition: all 0.15s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .breadcrumb-item:hover {
+            background: var(--bg-tertiary);
+            color: var(--text);
+        }
+        .breadcrumb-item.active {
+            background: var(--accent);
+            color: white;
+        }
+        .breadcrumb-separator {
+            color: var(--text-secondary);
+        }
+        .element-details {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            max-height: 60%;
+            overflow-y: auto;
+        }
+        .element-details-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .element-tag-name {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+        .close-details-btn {
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.15s;
+        }
+        .close-details-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text);
+        }
+        .element-details-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .element-details-tabs::-webkit-scrollbar {
+            display: none;
+        }
+        .element-tab-btn {
+            padding: 5px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text-secondary);
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .element-tab-btn:hover {
+            background: var(--bg-tertiary);
+        }
+        .element-tab-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .element-panel {
+            padding: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .element-attributes, .element-styles {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .attr-row, .style-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 6px;
+            background: var(--bg);
+            border-radius: 6px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-size: 10px;
+        }
+        .attr-name, .style-prop {
+            color: var(--accent);
+            font-weight: 600;
+            min-width: 60px;
+            max-width: 80px;
+            word-break: break-all;
+            flex-shrink: 0;
+        }
+        .attr-value, .style-value {
+            flex: 1;
+            color: var(--success);
+            word-break: break-all;
+            min-width: 0;
+        }
+        .attr-value input, .style-value input {
+            width: 100%;
+            padding: 3px 5px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            color: var(--text);
+            font-family: inherit;
+            font-size: inherit;
+        }
+        .attr-value input:focus, .style-value input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+        .attr-delete, .style-delete {
+            padding: 3px 5px;
+            border: none;
+            background: transparent;
+            color: var(--error);
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+        .attr-delete:hover, .style-delete:hover {
+            background: var(--error);
+            color: white;
+        }
+        .add-attribute-wrapper, .add-style-wrapper {
+            display: flex;
+            gap: 4px;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid var(--border);
+            flex-wrap: nowrap;
+        }
+        .attr-input, .style-input {
+            flex: 1;
+            min-width: 0;
+            padding: 5px 6px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 11px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+        }
+        .attr-input:focus, .style-input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+        .action-btn.small {
+            padding: 6px 10px;
+            font-size: 11px;
+        }
+        .action-btn.danger {
+            border-color: var(--error);
+            color: var(--error);
+        }
+        .action-btn.danger:hover {
+            background: var(--error);
+            color: white;
+        }
+        .action-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .computed-filter-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        .computed-filter-input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+        .computed-styles {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .computed-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 8px;
+            background: var(--bg);
+            border-radius: 4px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-size: 10px;
+        }
+        .computed-prop {
+            color: var(--text-secondary);
+        }
+        .computed-value {
+            color: var(--text);
+            max-width: 50%;
+            text-align: right;
+            word-break: break-all;
+        }
+        .element-actions {
+            display: flex;
+            gap: 6px;
+            padding: 8px;
+            border-top: 1px solid var(--border);
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .element-actions::-webkit-scrollbar {
+            display: none;
+        }
+        .selecting-element {
+            cursor: crosshair !important;
+        }
+        .selecting-element * {
+            cursor: crosshair !important;
+        }
+        
+        /* Modal dialog styles */
+        .dev-console-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 10003;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .dev-console-modal {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 400px;
+            width: 100%;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+        .dev-console-modal h3 {
+            margin: 0 0 15px 0;
+            color: var(--text);
+            font-size: 16px;
+        }
+        .dev-console-modal p {
+            margin: 0 0 15px 0;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+        .dev-console-modal input,
+        .dev-console-modal textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            color: var(--text);
+            font-size: 13px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .dev-console-modal textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        .dev-console-modal input:focus,
+        .dev-console-modal textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .dev-console-modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .dev-console-modal-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .dev-console-modal-btn:hover {
+            background: var(--bg-tertiary);
+        }
+        .dev-console-modal-btn.primary {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .dev-console-modal-btn.primary:hover {
+            background: var(--accent-light);
+        }
+        .dev-console-modal-btn.danger {
+            background: var(--error);
+            color: white;
+            border-color: var(--error);
+        }
+        .dev-console-modal-btn.danger:hover {
+            opacity: 0.9;
+        }
     `;
     
     let consoleStyles = getConsoleStyles(themeVars);
@@ -862,6 +1332,86 @@
             }
             document.body.removeChild(textarea);
         }
+    };
+
+    // Mobile-friendly modal dialogs
+    const showModal = (options) => {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'dev-console-modal-overlay';
+            
+            const modal = document.createElement('div');
+            modal.className = 'dev-console-modal';
+            
+            const title = document.createElement('h3');
+            title.textContent = options.title || 'Dialog';
+            modal.appendChild(title);
+            
+            if (options.message) {
+                const message = document.createElement('p');
+                message.textContent = options.message;
+                modal.appendChild(message);
+            }
+            
+            let inputEl = null;
+            if (options.input) {
+                inputEl = document.createElement(options.multiline ? 'textarea' : 'input');
+                inputEl.type = 'text';
+                inputEl.value = options.defaultValue || '';
+                inputEl.placeholder = options.placeholder || '';
+                modal.appendChild(inputEl);
+            }
+            
+            const buttons = document.createElement('div');
+            buttons.className = 'dev-console-modal-buttons';
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'dev-console-modal-btn';
+            cancelBtn.textContent = options.cancelText || 'Cancel';
+            cancelBtn.addEventListener('click', () => {
+                overlay.remove();
+                resolve(options.input ? null : false);
+            });
+            buttons.appendChild(cancelBtn);
+            
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = `dev-console-modal-btn ${options.danger ? 'danger' : 'primary'}`;
+            confirmBtn.textContent = options.confirmText || 'OK';
+            confirmBtn.addEventListener('click', () => {
+                overlay.remove();
+                resolve(options.input ? inputEl.value : true);
+            });
+            buttons.appendChild(confirmBtn);
+            
+            modal.appendChild(buttons);
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            
+            if (inputEl) {
+                inputEl.focus();
+                inputEl.select();
+            }
+        });
+    };
+    
+    const showPrompt = (title, defaultValue = '', placeholder = '') => {
+        return showModal({
+            title,
+            input: true,
+            multiline: true,
+            defaultValue,
+            placeholder,
+            confirmText: 'Save'
+        });
+    };
+    
+    const showConfirm = (title, message, danger = false) => {
+        return showModal({
+            title,
+            message,
+            danger,
+            confirmText: danger ? 'Delete' : 'Confirm'
+        });
     };
 
     const log = (message, type = "log") => {
@@ -1036,6 +1586,476 @@
         copyToClipboard(currentCleanHtml);
     };
     addTrackedEventListener(document.getElementById('copyHtml'), 'click', handleCopyHtml);
+
+    // Element Inspector functionality
+    let isSelectingElement = false;
+    let selectedElement = null;
+    let inspectorOverlay = null;
+    let inspectorLabel = null;
+    
+    const selectElementBtn = document.getElementById('selectElement');
+    const elementBreadcrumb = document.getElementById('elementBreadcrumb');
+    const elementDetails = document.getElementById('elementDetails');
+    const elementTagName = document.getElementById('elementTagName');
+    const elementAttributes = document.getElementById('elementAttributes');
+    const elementStyles = document.getElementById('elementStyles');
+    const computedStyles = document.getElementById('computedStyles');
+    const computedFilterInput = document.getElementById('computedFilter');
+    
+    // Create inspector overlay and label
+    const createInspectorElements = () => {
+        if (!inspectorOverlay) {
+            inspectorOverlay = document.createElement('div');
+            inspectorOverlay.className = 'element-inspector-overlay';
+            document.body.appendChild(inspectorOverlay);
+        }
+        if (!inspectorLabel) {
+            inspectorLabel = document.createElement('div');
+            inspectorLabel.className = 'element-inspector-label';
+            document.body.appendChild(inspectorLabel);
+        }
+    };
+    
+    const removeInspectorElements = () => {
+        if (inspectorOverlay) {
+            inspectorOverlay.remove();
+            inspectorOverlay = null;
+        }
+        if (inspectorLabel) {
+            inspectorLabel.remove();
+            inspectorLabel = null;
+        }
+    };
+    
+    const getElementSelector = (element) => {
+        let selector = element.tagName.toLowerCase();
+        if (element.id) {
+            selector += `#${element.id}`;
+        } else if (element.className && typeof element.className === 'string') {
+            const classes = element.className.trim().split(/\s+/).filter(c => c && !c.startsWith('element-inspector'));
+            if (classes.length > 0) {
+                selector += `.${classes.slice(0, 2).join('.')}`;
+            }
+        }
+        return selector;
+    };
+    
+    const updateInspectorOverlay = (element) => {
+        if (!element || !inspectorOverlay || !inspectorLabel) return;
+        
+        const rect = element.getBoundingClientRect();
+        inspectorOverlay.style.left = `${rect.left + window.scrollX}px`;
+        inspectorOverlay.style.top = `${rect.top + window.scrollY}px`;
+        inspectorOverlay.style.width = `${rect.width}px`;
+        inspectorOverlay.style.height = `${rect.height}px`;
+        
+        const selector = getElementSelector(element);
+        const size = `${Math.round(rect.width)} × ${Math.round(rect.height)}`;
+        inspectorLabel.textContent = `${selector} (${size})`;
+        
+        // Position label above or below element
+        const labelTop = rect.top > 30 ? rect.top + window.scrollY - 25 : rect.bottom + window.scrollY + 5;
+        inspectorLabel.style.left = `${Math.max(5, rect.left + window.scrollX)}px`;
+        inspectorLabel.style.top = `${labelTop}px`;
+    };
+    
+    const hideInspectorOverlay = () => {
+        if (inspectorOverlay) {
+            inspectorOverlay.style.width = '0';
+            inspectorOverlay.style.height = '0';
+        }
+        if (inspectorLabel) {
+            inspectorLabel.textContent = '';
+        }
+    };
+    
+    const isDevConsoleElement = (element) => {
+        const devConsole = document.getElementById('dev-console');
+        return devConsole && (devConsole.contains(element) || element === devConsole || 
+               element.classList.contains('element-inspector-overlay') ||
+               element.classList.contains('element-inspector-label') ||
+               element.classList.contains('dev-console-toast'));
+    };
+    
+    const handleMouseMove = (e) => {
+        if (!isSelectingElement) return;
+        const element = document.elementFromPoint(e.clientX, e.clientY);
+        if (element && !isDevConsoleElement(element)) {
+            updateInspectorOverlay(element);
+        }
+    };
+    
+    const handleTouchMove = (e) => {
+        if (!isSelectingElement) return;
+        const touch = e.touches[0];
+        const element = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (element && !isDevConsoleElement(element)) {
+            updateInspectorOverlay(element);
+        }
+    };
+    
+    const handleElementClick = (e) => {
+        if (!isSelectingElement) return;
+        
+        const element = document.elementFromPoint(e.clientX, e.clientY);
+        if (element && !isDevConsoleElement(element)) {
+            e.preventDefault();
+            e.stopPropagation();
+            selectElement(element);
+            stopSelectingElement();
+        }
+    };
+    
+    const handleTouchEnd = (e) => {
+        if (!isSelectingElement) return;
+        
+        const touch = e.changedTouches[0];
+        const element = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (element && !isDevConsoleElement(element)) {
+            e.preventDefault();
+            selectElement(element);
+            stopSelectingElement();
+        }
+    };
+    
+    const startSelectingElement = () => {
+        isSelectingElement = true;
+        createInspectorElements();
+        document.body.classList.add('selecting-element');
+        selectElementBtn.classList.add('active');
+        selectElementBtn.innerHTML = '❌ Cancel';
+        
+        addTrackedEventListener(document, 'mousemove', handleMouseMove);
+        addTrackedEventListener(document, 'touchmove', handleTouchMove);
+        addTrackedEventListener(document, 'click', handleElementClick, true);
+        addTrackedEventListener(document, 'touchend', handleTouchEnd);
+        
+        log('Element selection mode activated. Click on any element to inspect it.', 'info');
+    };
+    
+    const stopSelectingElement = () => {
+        isSelectingElement = false;
+        document.body.classList.remove('selecting-element');
+        selectElementBtn.classList.remove('active');
+        selectElementBtn.innerHTML = '🎯 Select Element';
+        hideInspectorOverlay();
+        removeInspectorElements();
+        
+        removeTrackedEventListener(document, 'mousemove', handleMouseMove);
+        removeTrackedEventListener(document, 'touchmove', handleTouchMove);
+        removeTrackedEventListener(document, 'click', handleElementClick, true);
+        removeTrackedEventListener(document, 'touchend', handleTouchEnd);
+    };
+    
+    const toggleSelectElement = () => {
+        if (isSelectingElement) {
+            stopSelectingElement();
+        } else {
+            startSelectingElement();
+        }
+    };
+    
+    addTrackedEventListener(selectElementBtn, 'click', toggleSelectElement);
+    
+    // Build breadcrumb path
+    const buildBreadcrumb = (element) => {
+        elementBreadcrumb.innerHTML = '';
+        elementBreadcrumb.classList.remove('hidden');
+        
+        const path = [];
+        let current = element;
+        while (current && current !== document.documentElement.parentNode) {
+            if (current.nodeType === Node.ELEMENT_NODE) {
+                path.unshift(current);
+            }
+            current = current.parentNode;
+        }
+        
+        path.forEach((el, index) => {
+            if (index > 0) {
+                const sep = document.createElement('span');
+                sep.className = 'breadcrumb-separator';
+                sep.textContent = ' › ';
+                elementBreadcrumb.appendChild(sep);
+            }
+            
+            const item = document.createElement('span');
+            item.className = 'breadcrumb-item';
+            if (el === element) {
+                item.classList.add('active');
+            }
+            item.textContent = getElementSelector(el);
+            const clickHandler = () => selectElement(el);
+            addTrackedEventListener(item, 'click', clickHandler);
+            elementBreadcrumb.appendChild(item);
+        });
+    };
+    
+    // Display element attributes
+    const displayAttributes = (element) => {
+        elementAttributes.innerHTML = '';
+        
+        if (element.attributes.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.color = 'var(--text-secondary)';
+            empty.style.padding = '10px';
+            empty.textContent = 'No attributes';
+            elementAttributes.appendChild(empty);
+            return;
+        }
+        
+        Array.from(element.attributes).forEach(attr => {
+            const row = document.createElement('div');
+            row.className = 'attr-row';
+            
+            const name = document.createElement('span');
+            name.className = 'attr-name';
+            name.textContent = attr.name;
+            
+            const value = document.createElement('span');
+            value.className = 'attr-value';
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = attr.value;
+            input.addEventListener('change', () => {
+                element.setAttribute(attr.name, input.value);
+                log(`Updated attribute "${attr.name}" to "${input.value}"`, 'info');
+            });
+            value.appendChild(input);
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'attr-delete';
+            deleteBtn.textContent = '×';
+            deleteBtn.addEventListener('click', () => {
+                element.removeAttribute(attr.name);
+                displayAttributes(element);
+                log(`Removed attribute "${attr.name}"`, 'info');
+            });
+            
+            row.appendChild(name);
+            row.appendChild(value);
+            row.appendChild(deleteBtn);
+            elementAttributes.appendChild(row);
+        });
+    };
+    
+    // Display inline styles
+    const displayInlineStyles = (element) => {
+        elementStyles.innerHTML = '';
+        
+        const inlineStyle = element.style;
+        const styleCount = inlineStyle.length;
+        
+        if (styleCount === 0) {
+            const empty = document.createElement('div');
+            empty.style.color = 'var(--text-secondary)';
+            empty.style.padding = '10px';
+            empty.textContent = 'No inline styles';
+            elementStyles.appendChild(empty);
+            return;
+        }
+        
+        for (let i = 0; i < styleCount; i++) {
+            const prop = inlineStyle[i];
+            const value = inlineStyle.getPropertyValue(prop);
+            
+            const row = document.createElement('div');
+            row.className = 'style-row';
+            
+            const propSpan = document.createElement('span');
+            propSpan.className = 'style-prop';
+            propSpan.textContent = prop;
+            
+            const valueSpan = document.createElement('span');
+            valueSpan.className = 'style-value';
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = value;
+            input.addEventListener('change', () => {
+                element.style.setProperty(prop, input.value);
+                log(`Updated style "${prop}" to "${input.value}"`, 'info');
+            });
+            valueSpan.appendChild(input);
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'style-delete';
+            deleteBtn.textContent = '×';
+            deleteBtn.addEventListener('click', () => {
+                element.style.removeProperty(prop);
+                displayInlineStyles(element);
+                log(`Removed style "${prop}"`, 'info');
+            });
+            
+            row.appendChild(propSpan);
+            row.appendChild(valueSpan);
+            row.appendChild(deleteBtn);
+            elementStyles.appendChild(row);
+        }
+    };
+    
+    // Display computed styles
+    let currentComputedFilter = '';
+    
+    const displayComputedStyles = (element) => {
+        computedStyles.innerHTML = '';
+        
+        const computed = window.getComputedStyle(element);
+        const allProps = Array.from(computed);
+        
+        const filteredProps = allProps.filter(prop => {
+            if (!currentComputedFilter) return true;
+            const value = computed.getPropertyValue(prop);
+            return prop.toLowerCase().includes(currentComputedFilter.toLowerCase()) ||
+                   value.toLowerCase().includes(currentComputedFilter.toLowerCase());
+        });
+        
+        filteredProps.forEach(prop => {
+            const value = computed.getPropertyValue(prop);
+            
+            const row = document.createElement('div');
+            row.className = 'computed-row';
+            
+            const propSpan = document.createElement('span');
+            propSpan.className = 'computed-prop';
+            propSpan.textContent = prop;
+            
+            const valueSpan = document.createElement('span');
+            valueSpan.className = 'computed-value';
+            valueSpan.textContent = value;
+            
+            row.appendChild(propSpan);
+            row.appendChild(valueSpan);
+            computedStyles.appendChild(row);
+        });
+    };
+    
+    addTrackedEventListener(computedFilterInput, 'input', (e) => {
+        currentComputedFilter = e.target.value;
+        if (selectedElement) {
+            displayComputedStyles(selectedElement);
+        }
+    });
+    
+    // Select and display element
+    const selectElement = (element) => {
+        selectedElement = element;
+        
+        // Build breadcrumb
+        buildBreadcrumb(element);
+        
+        // Show element details panel
+        elementDetails.classList.remove('hidden');
+        
+        // Display tag name
+        const selector = getElementSelector(element);
+        elementTagName.textContent = `<${selector}>`;
+        
+        // Display attributes
+        displayAttributes(element);
+        
+        // Display inline styles
+        displayInlineStyles(element);
+        
+        // Display computed styles
+        displayComputedStyles(element);
+        
+        log(`Selected element: <${selector}>`, 'info');
+    };
+    
+    // Close element details
+    addTrackedEventListener(document.getElementById('closeElementDetails'), 'click', () => {
+        elementDetails.classList.add('hidden');
+        elementBreadcrumb.classList.add('hidden');
+        selectedElement = null;
+    });
+    
+    // Element details tab navigation
+    const elementPanels = document.querySelectorAll('.element-panel');
+    document.querySelectorAll('.element-tab-btn').forEach(btn => {
+        addTrackedEventListener(btn, 'click', () => {
+            document.querySelectorAll('.element-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            elementPanels.forEach(p => p.classList.add('hidden'));
+            document.getElementById(btn.dataset.tab + 'Panel').classList.remove('hidden');
+        });
+    });
+    
+    // Add new attribute
+    addTrackedEventListener(document.getElementById('addAttribute'), 'click', () => {
+        if (!selectedElement) return;
+        
+        const nameInput = document.getElementById('newAttrName');
+        const valueInput = document.getElementById('newAttrValue');
+        const name = nameInput.value.trim();
+        const value = valueInput.value;
+        
+        if (name) {
+            selectedElement.setAttribute(name, value);
+            displayAttributes(selectedElement);
+            nameInput.value = '';
+            valueInput.value = '';
+            log(`Added attribute "${name}=${value}"`, 'info');
+        }
+    });
+    
+    // Add new style
+    addTrackedEventListener(document.getElementById('addStyle'), 'click', () => {
+        if (!selectedElement) return;
+        
+        const propInput = document.getElementById('newStyleProp');
+        const valueInput = document.getElementById('newStyleValue');
+        const prop = propInput.value.trim();
+        const value = valueInput.value.trim();
+        
+        if (prop && value) {
+            selectedElement.style.setProperty(prop, value);
+            displayInlineStyles(selectedElement);
+            propInput.value = '';
+            valueInput.value = '';
+            log(`Added style "${prop}: ${value}"`, 'info');
+        }
+    });
+    
+    // Edit element text
+    addTrackedEventListener(document.getElementById('editElementText'), 'click', async () => {
+        if (!selectedElement) return;
+        
+        const currentText = selectedElement.textContent;
+        const newText = await showPrompt('Edit Element Text', currentText, 'Enter new text content...');
+        
+        if (newText !== null) {
+            selectedElement.textContent = newText;
+            log('Updated element text content', 'info');
+        }
+    });
+    
+    // Delete element
+    addTrackedEventListener(document.getElementById('deleteElement'), 'click', async () => {
+        if (!selectedElement) return;
+        
+        const selector = getElementSelector(selectedElement);
+        const confirmed = await showConfirm(
+            'Delete Element',
+            `Are you sure you want to delete <${selector}>?`,
+            true
+        );
+        
+        if (confirmed) {
+            selectedElement.remove();
+            selectedElement = null;
+            elementDetails.classList.add('hidden');
+            elementBreadcrumb.classList.add('hidden');
+            log(`Deleted element <${selector}>`, 'info');
+        }
+    });
+    
+    // Copy element HTML
+    addTrackedEventListener(document.getElementById('copyElementHtml'), 'click', () => {
+        if (!selectedElement) return;
+        copyToClipboard(selectedElement.outerHTML);
+    });
 
     // Network monitoring functionality
     const networkContainer = document.querySelector('.network-container');
@@ -1631,6 +2651,13 @@ ${entry.responseBody}`;
             element.removeEventListener(event, handler);
         });
         eventListeners.length = 0;
+        
+        // Clean up element inspector
+        if (isSelectingElement) {
+            stopSelectingElement();
+        }
+        removeInspectorElements();
+        document.body.classList.remove('selecting-element');
         
         // Restore original console methods
         ["log", "error", "warn", "info"].forEach((method) => {
