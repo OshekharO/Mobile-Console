@@ -4,11 +4,17 @@
         return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
 
-    const theme = isDarkMode() ? 'dark' : 'light';
+    let theme = isDarkMode() ? 'dark' : 'light';
     
     // Configuration
     const MAX_NETWORK_ENTRIES = 100;
     const MAX_CONSOLE_ENTRIES = 500;
+    const MIN_CONSOLE_HEIGHT = 100;
+    const MAX_CONSOLE_HEIGHT_PERCENT = 90;
+    
+    // Console command history
+    const commandHistory = [];
+    let historyIndex = -1;
     
     // Store event listeners for cleanup
     const eventListeners = [];
@@ -30,48 +36,93 @@
                 seen.add(value);
             }
             return value;
-        });
+        }, 2);
     };
 
     // HTML template for the dev console
     const consoleHTML = `
         <div id="dev-console" class="dev-console-container">
+            <div class="dev-console-resize-handle" id="resizeHandle"></div>
             <div class="dev-console-nav">
-                <button class="dev-console-nav-button active" id="navConsole">Console</button>
-                <button class="dev-console-nav-button" id="navElements">Elements</button>
-                <button class="dev-console-nav-button" id="navNetwork">Network</button>
-                <button class="dev-console-nav-button" id="navInfo">Info</button>
-                <button class="dev-console-nav-button" id="consoleMinimize">_</button>
-                <button class="dev-console-nav-button" id="consoleExit">×</button>
+                <button class="dev-console-nav-button active" id="navConsole" title="Console">
+                    <span class="nav-icon">⌘</span><span class="nav-text">Console</span>
+                </button>
+                <button class="dev-console-nav-button" id="navElements" title="Elements">
+                    <span class="nav-icon">◇</span><span class="nav-text">Elements</span>
+                </button>
+                <button class="dev-console-nav-button" id="navNetwork" title="Network">
+                    <span class="nav-icon">⇄</span><span class="nav-text">Network</span>
+                </button>
+                <button class="dev-console-nav-button" id="navStorage" title="Storage">
+                    <span class="nav-icon">▤</span><span class="nav-text">Storage</span>
+                </button>
+                <button class="dev-console-nav-button" id="navInfo" title="Info">
+                    <span class="nav-icon">ⓘ</span><span class="nav-text">Info</span>
+                </button>
+                <button class="dev-console-nav-button nav-action" id="themeToggle" title="Toggle Theme">
+                    <span class="nav-icon" id="themeIcon">◐</span>
+                </button>
+                <button class="dev-console-nav-button nav-action" id="consoleMinimize" title="Minimize">
+                    <span class="nav-icon">−</span>
+                </button>
+                <button class="dev-console-nav-button nav-action" id="consoleExit" title="Close">
+                    <span class="nav-icon">×</span>
+                </button>
             </div>
             <div class="dev-console-body">
                 <div id="sectionConsole" class="dev-console-section">
+                    <div class="console-filter-wrapper">
+                        <input type="text" id="consoleFilter" placeholder="Filter logs..." class="console-filter-input" />
+                        <div class="console-filter-buttons">
+                            <button class="filter-btn active" data-filter="all">All</button>
+                            <button class="filter-btn" data-filter="log">Log</button>
+                            <button class="filter-btn" data-filter="error">Error</button>
+                            <button class="filter-btn" data-filter="warn">Warn</button>
+                            <button class="filter-btn" data-filter="info">Info</button>
+                        </div>
+                    </div>
                     <div class="console-output"></div>
                     <div class="console-input-wrapper">
-                        <button id="clearConsole">Clear Console</button>
-                        <textarea id="consoleInput" placeholder="Enter JavaScript..."></textarea>
+                        <button id="clearConsole" class="action-btn">🗑 Clear</button>
+                        <textarea id="consoleInput" placeholder="Enter JavaScript... (↑↓ for history)"></textarea>
                     </div>
                 </div>
                 <div id="sectionElements" class="dev-console-section hidden">
                     <div class="elements-controls">
-                        <button id="elementViewer">View HTML</button>
+                        <button id="elementViewer" class="action-btn">📄 View HTML</button>
+                        <button id="copyHtml" class="action-btn">📋 Copy HTML</button>
                     </div>
                     <div class="elements-container"></div>
                 </div>
                 <div id="sectionNetwork" class="dev-console-section hidden">
                     <div class="network-controls">
-                        <button id="clearNetwork">Clear</button>
+                        <input type="text" id="networkFilter" placeholder="Filter requests..." class="network-filter-input" />
+                        <button id="clearNetwork" class="action-btn">🗑 Clear</button>
                     </div>
                     <div class="network-container"></div>
                     <div class="network-details hidden"></div>
                 </div>
+                <div id="sectionStorage" class="dev-console-section hidden">
+                    <div class="storage-controls">
+                        <button class="storage-tab-btn active" data-storage="local">localStorage</button>
+                        <button class="storage-tab-btn" data-storage="session">sessionStorage</button>
+                        <button id="refreshStorage" class="action-btn">🔄 Refresh</button>
+                    </div>
+                    <div class="storage-container"></div>
+                </div>
                 <div id="sectionInfo" class="dev-console-section hidden">
-                    <div id="deviceInfo" class="device-info"></div>
-                    <div id="aboutInfo" class="about-info"></div>
+                    <div class="info-tabs">
+                        <button class="info-tab-btn active" data-info="device">Device</button>
+                        <button class="info-tab-btn" data-info="performance">Performance</button>
+                        <button class="info-tab-btn" data-info="about">About</button>
+                    </div>
+                    <div id="deviceInfo" class="device-info info-panel"></div>
+                    <div id="performanceInfo" class="performance-info info-panel hidden"></div>
+                    <div id="aboutInfo" class="about-info info-panel hidden"></div>
                     <div class="info-controls">
-                        <button id="clearCookies">Clear Cookies</button>
-                        <button id="clearStorage">Clear Storage</button>
-                        <button id="reloadPage">Reload Page</button>
+                        <button id="clearCookies" class="action-btn">🍪 Clear Cookies</button>
+                        <button id="clearStorage" class="action-btn">🗂 Clear Storage</button>
+                        <button id="reloadPage" class="action-btn">🔄 Reload Page</button>
                     </div>
                 </div>
             </div>
@@ -79,39 +130,59 @@
     `;
 
     // CSS variables for theming (reduces code duplication)
-    const themeVars = theme === 'light' ? {
+    const getThemeVars = (currentTheme) => currentTheme === 'light' ? {
         bg: '#ffffff',
-        bgSecondary: '#f0f0f0',
-        bgTertiary: '#f5f5f5',
-        text: '#000',
-        textSecondary: '#888',
-        border: '#ccc',
-        borderLight: '#d0d0d0',
-        borderDark: '#eee',
-        activeBg: '#ffffff'
+        bgSecondary: '#f5f6f7',
+        bgTertiary: '#eef1f4',
+        text: '#1a1a2e',
+        textSecondary: '#6b7280',
+        border: '#e5e7eb',
+        borderLight: '#f3f4f6',
+        borderDark: '#d1d5db',
+        activeBg: '#ffffff',
+        accent: '#3b82f6',
+        accentLight: '#60a5fa',
+        success: '#10b981',
+        warning: '#f59e0b',
+        error: '#ef4444',
+        shadow: 'rgba(0, 0, 0, 0.08)'
     } : {
-        bg: '#1e1e1e',
-        bgSecondary: '#2d2d2d',
-        bgTertiary: '#2d2d2d',
-        text: '#fff',
-        textSecondary: '#aaa',
-        border: '#3d3d3d',
-        borderLight: '#3d3d3d',
-        borderDark: '#3d3d3d',
-        activeBg: '#3d3d3d'
+        bg: '#0f0f23',
+        bgSecondary: '#1a1a2e',
+        bgTertiary: '#16213e',
+        text: '#e2e8f0',
+        textSecondary: '#94a3b8',
+        border: '#334155',
+        borderLight: '#475569',
+        borderDark: '#1e293b',
+        activeBg: '#1e293b',
+        accent: '#60a5fa',
+        accentLight: '#93c5fd',
+        success: '#34d399',
+        warning: '#fbbf24',
+        error: '#f87171',
+        shadow: 'rgba(0, 0, 0, 0.3)'
     };
 
+    let themeVars = getThemeVars(theme);
+
     // CSS styles for the dev console
-    const consoleStyles = `
+    const getConsoleStyles = (vars) => `
         .dev-console-container {
-            --bg: ${themeVars.bg};
-            --bg-secondary: ${themeVars.bgSecondary};
-            --bg-tertiary: ${themeVars.bgTertiary};
-            --text: ${themeVars.text};
-            --text-secondary: ${themeVars.textSecondary};
-            --border: ${themeVars.border};
-            --border-light: ${themeVars.borderLight};
-            --active-bg: ${themeVars.activeBg};
+            --bg: ${vars.bg};
+            --bg-secondary: ${vars.bgSecondary};
+            --bg-tertiary: ${vars.bgTertiary};
+            --text: ${vars.text};
+            --text-secondary: ${vars.textSecondary};
+            --border: ${vars.border};
+            --border-light: ${vars.borderLight};
+            --active-bg: ${vars.activeBg};
+            --accent: ${vars.accent};
+            --accent-light: ${vars.accentLight};
+            --success: ${vars.success};
+            --warning: ${vars.warning};
+            --error: ${vars.error};
+            --shadow: ${vars.shadow};
             position: fixed;
             bottom: 0;
             left: 0;
@@ -122,32 +193,93 @@
             z-index: 10000;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 -4px 20px var(--shadow);
             color: var(--text);
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+            transition: height 0.2s ease-out;
+        }
+        .dev-console-resize-handle {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 12px;
+            cursor: ns-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            z-index: 10001;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+        }
+        .dev-console-resize-handle::after {
+            content: '';
+            width: 40px;
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            transition: background 0.2s;
+        }
+        .dev-console-resize-handle:hover::after,
+        .dev-console-resize-handle:active::after {
+            background: var(--accent);
         }
         .dev-console-nav {
             display: flex;
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-light);
+            padding: 4px 4px 0 4px;
+            gap: 2px;
+            flex-wrap: wrap;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
         }
         .dev-console-nav-button {
-            padding: 10px 15px;
+            padding: 8px 12px;
             border: none;
             background: transparent;
-            color: var(--text);
+            color: var(--text-secondary);
             cursor: pointer;
-            font-size: 14px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.15s ease;
             flex-grow: 1;
-            text-align: center;
+            justify-content: center;
+            min-width: fit-content;
+        }
+        .dev-console-nav-button:hover {
+            background: var(--bg-tertiary);
+            color: var(--text);
         }
         .dev-console-nav-button.active {
-            background: var(--active-bg);
-            border-bottom: 2px solid #2196f3;
+            background: var(--bg);
+            color: var(--accent);
+            font-weight: 500;
         }
-        #consoleExit {
+        .dev-console-nav-button.nav-action {
             flex-grow: 0;
-            font-size: 20px;
-            padding: 5px 15px;
+            padding: 8px 10px;
+            color: var(--text-secondary);
+        }
+        .dev-console-nav-button.nav-action:hover {
+            color: var(--text);
+            background: var(--bg-tertiary);
+        }
+        .nav-icon {
+            font-size: 14px;
+        }
+        .nav-text {
+            font-size: 11px;
+        }
+        @media (max-width: 480px) {
+            .nav-text { display: none; }
+            .dev-console-nav-button { padding: 10px 8px; }
+            .nav-icon { font-size: 16px; }
         }
         .dev-console-body {
             flex-grow: 1;
@@ -162,86 +294,395 @@
         .hidden {
             display: none !important;
         }
-        .console-output, .network-container, .network-details, .elements-container {
+        
+        /* Console Filter */
+        .console-filter-wrapper {
+            padding: 8px 10px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .console-filter-input, .network-filter-input {
+            flex: 1;
+            min-width: 120px;
+            padding: 6px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 12px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .console-filter-input:focus, .network-filter-input:focus {
+            border-color: var(--accent);
+        }
+        .console-filter-buttons {
+            display: flex;
+            gap: 4px;
+        }
+        .filter-btn {
+            padding: 4px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg);
+            color: var(--text-secondary);
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .filter-btn:hover {
+            background: var(--bg-tertiary);
+        }
+        .filter-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        
+        .console-output, .network-container, .network-details, .elements-container, .storage-container {
             flex-grow: 1;
             overflow-y: auto;
             padding: 10px;
-            font-family: monospace;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
             font-size: 12px;
-            line-height: 1.4;
+            line-height: 1.5;
             color: var(--text);
         }
+        .console-entry {
+            padding: 4px 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            transition: background 0.1s;
+        }
+        .console-entry:hover {
+            background: var(--bg-secondary);
+        }
+        .console-entry .timestamp {
+            color: var(--text-secondary);
+            font-size: 10px;
+            white-space: nowrap;
+        }
+        .console-entry .type-badge {
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .console-entry .message {
+            flex: 1;
+            word-break: break-word;
+        }
+        .console-entry .copy-btn {
+            opacity: 0;
+            padding: 2px 6px;
+            border: none;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: opacity 0.15s;
+        }
+        .console-entry:hover .copy-btn {
+            opacity: 1;
+        }
+        .console-entry .copy-btn:hover {
+            background: var(--accent);
+            color: white;
+        }
+        .console-entry.log .type-badge { background: var(--bg-tertiary); color: var(--text); }
+        .console-entry.error .type-badge { background: #fee2e2; color: var(--error); }
+        .console-entry.warn .type-badge { background: #fef3c7; color: var(--warning); }
+        .console-entry.info .type-badge { background: #dbeafe; color: var(--accent); }
+        .console-entry.input .type-badge { background: var(--bg-tertiary); color: var(--text-secondary); }
+        .console-entry.error { border-left: 3px solid var(--error); }
+        .console-entry.warn { border-left: 3px solid var(--warning); }
+        
         .console-input-wrapper {
             border-top: 1px solid var(--border);
             padding: 10px;
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+            background: var(--bg-secondary);
         }
         #consoleInput {
-            width: 100%;
-            height: 40px;
+            flex: 1;
+            min-height: 36px;
+            max-height: 100px;
             border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 5px;
-            font-family: monospace;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
             font-size: 12px;
-            margin-top: 10px;
             color: var(--text);
             background: var(--bg);
             box-sizing: border-box;
+            resize: none;
+            outline: none;
+            transition: border-color 0.15s;
         }
-        .elements-controls, .network-controls, .info-controls {
-            display: flex;
-            padding: 10px;
-            gap: 10px;
+        #consoleInput:focus {
+            border-color: var(--accent);
         }
-        .elements-controls button, .network-controls button, .info-controls button, #clearConsole {
-            flex-grow: 1;
-            padding: 8px;
-            background: var(--bg-secondary);
+        
+        /* Action buttons */
+        .action-btn {
+            padding: 8px 12px;
+            background: var(--bg);
             border: 1px solid var(--border);
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
             color: var(--text);
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s;
+            white-space: nowrap;
         }
-        .device-info {
+        .action-btn:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent);
+        }
+        .action-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .elements-controls, .network-controls, .info-controls, .storage-controls {
+            display: flex;
+            padding: 8px 10px;
+            gap: 8px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+        
+        /* Storage styles */
+        .storage-tab-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .storage-tab-btn:hover {
+            background: var(--bg-tertiary);
+        }
+        .storage-tab-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .storage-container {
+            padding: 10px;
+        }
+        .storage-item {
+            display: flex;
+            padding: 8px 12px;
+            margin: 4px 0;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            gap: 12px;
+            align-items: flex-start;
+        }
+        .storage-item .key {
+            font-weight: 600;
+            color: var(--accent);
+            min-width: 100px;
+            word-break: break-all;
+        }
+        .storage-item .value {
+            flex: 1;
+            color: var(--text);
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 11px;
+        }
+        .storage-item .actions {
+            display: flex;
+            gap: 4px;
+        }
+        .storage-item .delete-btn {
+            padding: 4px 8px;
+            border: none;
+            background: var(--error);
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .storage-empty {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+        
+        /* Info tabs */
+        .info-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 8px 10px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+        .info-tab-btn {
+            padding: 6px 16px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .info-tab-btn:hover {
+            background: var(--bg-tertiary);
+        }
+        .info-tab-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .info-panel {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .device-info, .performance-info {
+            margin: 10px;
+            padding: 0;
+        }
+        .info-card {
             background: var(--bg-secondary);
             border: 1px solid var(--border);
-            border-radius: 4px;
-            margin: 10px;
-            padding: 10px;
-            font-size: 12px;
-            color: var(--text);
-        }
-        .device-info h4, .device-info p {
-            margin: 5px 0;
-            color: var(--text);
-        }
-        .device-info h4 {
-            margin-top: 0;
+            border-radius: 8px;
+            padding: 12px 16px;
             margin-bottom: 10px;
         }
+        .info-card h4 {
+            margin: 0 0 10px 0;
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+        }
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        .info-row .label {
+            color: var(--text-secondary);
+        }
+        .info-row .value {
+            color: var(--text);
+            font-weight: 500;
+            text-align: right;
+            max-width: 60%;
+            word-break: break-all;
+        }
+        
+        /* Performance metrics */
+        .perf-metric {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+        }
+        .perf-metric .metric-icon {
+            font-size: 18px;
+        }
+        .perf-metric .metric-info {
+            flex: 1;
+        }
+        .perf-metric .metric-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .perf-metric .metric-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .perf-bar {
+            height: 4px;
+            background: var(--bg-tertiary);
+            border-radius: 2px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+        .perf-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+        .perf-bar-fill.good { background: var(--success); }
+        .perf-bar-fill.warning { background: var(--warning); }
+        .perf-bar-fill.bad { background: var(--error); }
+        
         .network-item {
             border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 10px;
-            margin-bottom: 10px;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
             cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            color: var(--text);
-            background: var(--bg);
+            background: var(--bg-secondary);
+            transition: all 0.15s;
+        }
+        .network-item:hover {
+            border-color: var(--accent);
+            box-shadow: 0 2px 8px var(--shadow);
         }
         .network-item-header {
             display: flex;
             justify-content: space-between;
-            font-weight: bold;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .network-item-method {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            background: var(--accent);
+            color: white;
+        }
+        .network-item-status {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .network-item-status.success { background: #d1fae5; color: var(--success); }
+        .network-item-status.error { background: #fee2e2; color: var(--error); }
+        .network-item-status.redirect { background: #fef3c7; color: var(--warning); }
+        .network-item-url {
+            word-break: break-all;
+            font-size: 12px;
             color: var(--text);
         }
         .network-item-details {
-            margin-top: 5px;
+            display: flex;
+            gap: 12px;
+            margin-top: 6px;
             font-size: 11px;
-            color: var(--text);
-        }
-        .network-item-url {
-            word-break: break-all;
+            color: var(--text-secondary);
         }
         .network-details {
             color: var(--text);
@@ -251,6 +692,9 @@
             word-break: break-all;
             background: var(--bg-secondary);
             color: var(--text);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 11px;
         }
         .back-button {
             margin-bottom: 10px;
@@ -258,52 +702,114 @@
             width: 100%;
             height: 40px;
             border: 1px solid var(--border);
-            border-radius: 4px;
+            border-radius: 8px;
             background: var(--bg-secondary);
             cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.15s;
+        }
+        .back-button:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent);
         }
         .elements-container {
             white-space: pre-wrap;
-            font-family: monospace;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
             font-size: 12px;
             padding: 10px;
             overflow-x: auto;
-            background-color: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: 4px;
+            background-color: var(--bg-secondary);
+            margin: 10px;
+            border-radius: 8px;
             color: var(--text);
         }
         .about-info {
-            background: var(--bg);
+            background: var(--bg-secondary);
             border: 1px solid var(--border);
-            border-radius: 4px;
+            border-radius: 8px;
             margin: 10px;
-            padding: 15px;
-            font-size: 14px;
-            color: var(--text);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            text-align: center;
         }
-        .about-info h4 {
-            margin-top: 0;
+        .about-logo {
+            font-size: 48px;
             margin-bottom: 10px;
+        }
+        .about-title {
+            font-size: 18px;
+            font-weight: 600;
             color: var(--text);
+            margin-bottom: 4px;
+        }
+        .about-version {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
         }
         .about-info a {
-            color: #2196f3;
+            color: var(--accent);
             text-decoration: none;
         }
         .about-info a:hover {
             text-decoration: underline;
         }
+        .about-links {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 16px;
+        }
+        .about-link {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 12px;
+            transition: all 0.15s;
+        }
+        .about-link:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            text-decoration: none;
+        }
         .dev-console-container.minimized {
-            height: 30px;
+            height: 44px !important;
             overflow: hidden;
         }
-        #consoleMinimize {
-            font-size: 18px;
-            line-height: 14px;
+        .dev-console-container.minimized .dev-console-body,
+        .dev-console-container.minimized .dev-console-resize-handle {
+            display: none;
+        }
+        
+        /* Toast notification */
+        .dev-console-toast {
+            position: fixed;
+            bottom: calc(50% + 20px);
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 16px;
+            background: var(--text);
+            color: var(--bg);
+            border-radius: 6px;
+            font-size: 12px;
+            z-index: 10002;
+            animation: toastFade 2s ease forwards;
+        }
+        @keyframes toastFade {
+            0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            85% { opacity: 1; }
+            100% { opacity: 0; }
         }
     `;
+    
+    let consoleStyles = getConsoleStyles(themeVars);
 
     // Inject HTML and CSS into the document
     const injectElement = (html) => {
@@ -320,6 +826,43 @@
     // Console functionality
     const consoleOutput = document.querySelector(".console-output");
     const consoleInput = document.getElementById("consoleInput");
+    let currentLogFilter = 'all';
+    let currentTextFilter = '';
+
+    // Toast notification helper
+    const showToast = (message) => {
+        const toast = document.createElement('div');
+        toast.className = 'dev-console-toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2000);
+    };
+
+    // Copy to clipboard helper
+    const copyToClipboard = (text) => {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Copied to clipboard!');
+            }).catch(() => {
+                showToast('Failed to copy');
+            });
+        } else {
+            // Fallback for older browsers
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('Copied to clipboard!');
+            } catch (e) {
+                showToast('Failed to copy');
+            }
+            document.body.removeChild(textarea);
+        }
+    };
 
     const log = (message, type = "log") => {
         // Memory management: remove oldest entries if over limit
@@ -327,47 +870,79 @@
             consoleOutput.removeChild(consoleOutput.firstChild);
         }
         
-        const line = document.createElement("div");
-        line.className = `console-${type}`;
+        const entry = document.createElement("div");
+        entry.className = `console-entry ${type}`;
+        entry.dataset.type = type;
+        entry.dataset.message = String(message).toLowerCase();
         const timestamp = new Date().toLocaleTimeString();
-        let color;
-        switch (type) {
-            case "error":
-                color = "#ff0000";
-                break;
-            case "warn":
-                color = "#ff9900";
-                break;
-            case "info":
-                color = "#0099ff";
-                break;
-            case "input":
-                color = themeVars.textSecondary;
-                break;
-            default:
-                color = themeVars.text;
-        }
         
-        // Create elements safely to prevent XSS
+        // Create timestamp span
         const timestampSpan = document.createElement("span");
-        timestampSpan.style.color = themeVars.textSecondary;
-        timestampSpan.textContent = `[${timestamp}]`;
+        timestampSpan.className = "timestamp";
+        timestampSpan.textContent = timestamp;
         
-        const typeSpan = document.createElement("span");
-        typeSpan.style.color = color;
-        typeSpan.textContent = ` [${type}] `;
+        // Create type badge
+        const typeBadge = document.createElement("span");
+        typeBadge.className = "type-badge";
+        typeBadge.textContent = type;
         
+        // Create message span
         const messageSpan = document.createElement("span");
-        messageSpan.style.color = themeVars.text;
+        messageSpan.className = "message";
         messageSpan.textContent = message;
         
-        line.appendChild(timestampSpan);
-        line.appendChild(typeSpan);
-        line.appendChild(messageSpan);
+        // Create copy button
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "copy-btn";
+        copyBtn.textContent = "Copy";
+        copyBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            copyToClipboard(message);
+        });
         
-        consoleOutput.appendChild(line);
+        entry.appendChild(timestampSpan);
+        entry.appendChild(typeBadge);
+        entry.appendChild(messageSpan);
+        entry.appendChild(copyBtn);
+        
+        // Apply current filters
+        if (currentLogFilter !== 'all' && type !== currentLogFilter) {
+            entry.style.display = 'none';
+        }
+        if (currentTextFilter && !String(message).toLowerCase().includes(currentTextFilter.toLowerCase())) {
+            entry.style.display = 'none';
+        }
+        
+        consoleOutput.appendChild(entry);
         consoleOutput.scrollTop = consoleOutput.scrollHeight;
     };
+
+    // Console filtering
+    const applyConsoleFilters = () => {
+        const entries = consoleOutput.querySelectorAll('.console-entry');
+        entries.forEach(entry => {
+            const matchesType = currentLogFilter === 'all' || entry.dataset.type === currentLogFilter;
+            const matchesText = !currentTextFilter || entry.dataset.message.includes(currentTextFilter.toLowerCase());
+            entry.style.display = matchesType && matchesText ? '' : 'none';
+        });
+    };
+
+    // Filter buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        addTrackedEventListener(btn, 'click', () => {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentLogFilter = btn.dataset.filter;
+            applyConsoleFilters();
+        });
+    });
+
+    // Text filter
+    const consoleFilterInput = document.getElementById('consoleFilter');
+    addTrackedEventListener(consoleFilterInput, 'input', (e) => {
+        currentTextFilter = e.target.value;
+        applyConsoleFilters();
+    });
 
     const clearConsole = () => {
         consoleOutput.innerHTML = "";
@@ -379,21 +954,44 @@
     const handleConsoleInput = (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            const code = consoleInput.value;
+            const code = consoleInput.value.trim();
+            if (!code) return;
+            
+            // Add to history
+            if (commandHistory[commandHistory.length - 1] !== code) {
+                commandHistory.push(code);
+            }
+            historyIndex = commandHistory.length;
+            
             log(`> ${code}`, "input");
             try {
                 const result = eval(code);
-                log(result);
+                log(typeof result === 'undefined' ? 'undefined' : (typeof result === "object" ? safeStringify(result) : String(result)));
             } catch (error) {
                 log(`Error: ${error.message}`, "error");
             }
             consoleInput.value = "";
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            if (historyIndex > 0) {
+                historyIndex--;
+                consoleInput.value = commandHistory[historyIndex];
+            }
+        } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            if (historyIndex < commandHistory.length - 1) {
+                historyIndex++;
+                consoleInput.value = commandHistory[historyIndex];
+            } else {
+                historyIndex = commandHistory.length;
+                consoleInput.value = "";
+            }
         }
     };
     addTrackedEventListener(consoleInput, "keydown", handleConsoleInput);
 
     // Navigation functionality
-    const navButtons = document.querySelectorAll(".dev-console-nav-button");
+    const navButtons = document.querySelectorAll(".dev-console-nav-button:not(.nav-action)");
     const sections = document.querySelectorAll(".dev-console-section");
 
     const handleNavClick = (button) => () => {
@@ -409,6 +1007,8 @@
     });
 
     // Element Viewer functionality
+    let currentCleanHtml = '';
+    
     const handleElementViewer = () => {
         const elementsContainer = document.querySelector('.elements-container');
         const devConsole = document.getElementById('dev-console');
@@ -420,18 +1020,28 @@
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
         doc.getElementById('dev-console').remove();
-        const cleanHtml = doc.documentElement.outerHTML;
+        currentCleanHtml = doc.documentElement.outerHTML;
         
         // Display the HTML as-is
-        elementsContainer.textContent = cleanHtml;
+        elementsContainer.textContent = currentCleanHtml;
         log('Page HTML loaded in the Elements tab.', 'info');
     };
     addTrackedEventListener(document.getElementById('elementViewer'), 'click', handleElementViewer);
+    
+    // Copy HTML functionality
+    const handleCopyHtml = () => {
+        if (!currentCleanHtml) {
+            handleElementViewer();
+        }
+        copyToClipboard(currentCleanHtml);
+    };
+    addTrackedEventListener(document.getElementById('copyHtml'), 'click', handleCopyHtml);
 
     // Network monitoring functionality
     const networkContainer = document.querySelector('.network-container');
     const networkDetails = document.querySelector('.network-details');
     let networkLog = [];
+    let networkFilterText = '';
 
     const addNetworkEntry = (entry) => {
         // Memory management: remove oldest entries if over limit
@@ -441,45 +1051,80 @@
         networkLog.push(entry);
         updateNetworkDisplay();
     };
+    
+    const getStatusClass = (status) => {
+        if (status === 'Error' || status >= 400) return 'error';
+        if (status >= 300) return 'redirect';
+        return 'success';
+    };
 
     const updateNetworkDisplay = () => {
         networkContainer.innerHTML = '';
-        networkLog.forEach((entry, index) => {
+        const filteredLog = networkLog.filter(entry => {
+            if (!networkFilterText) return true;
+            return entry.url.toLowerCase().includes(networkFilterText.toLowerCase()) ||
+                   entry.method.toLowerCase().includes(networkFilterText.toLowerCase());
+        });
+        
+        if (filteredLog.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'storage-empty';
+            empty.textContent = networkLog.length === 0 ? 'No network requests captured yet' : 'No matching requests';
+            networkContainer.appendChild(empty);
+            return;
+        }
+        
+        filteredLog.forEach((entry, index) => {
+            const actualIndex = networkLog.indexOf(entry);
             const item = document.createElement('div');
             item.className = 'network-item';
             
-            // Create elements safely to prevent XSS
+            // Create header with method and status
             const header = document.createElement('div');
             header.className = 'network-item-header';
-            const urlSpan = document.createElement('span');
+            
+            const methodSpan = document.createElement('span');
+            methodSpan.className = 'network-item-method';
+            methodSpan.textContent = entry.method;
+            
+            const statusSpan = document.createElement('span');
+            statusSpan.className = `network-item-status ${getStatusClass(entry.status)}`;
+            statusSpan.textContent = entry.status;
+            
+            header.appendChild(methodSpan);
+            header.appendChild(statusSpan);
+            
+            // Create URL display
+            const urlSpan = document.createElement('div');
             urlSpan.className = 'network-item-url';
             urlSpan.textContent = entry.url;
-            header.appendChild(urlSpan);
             
             // Create details elements safely using textContent
             const details = document.createElement('div');
             details.className = 'network-item-details';
             
-            const statusDiv = document.createElement('div');
-            statusDiv.textContent = `Status: ${entry.status}`;
-            const methodDiv = document.createElement('div');
-            methodDiv.textContent = `Method: ${entry.method}`;
-            const typeDiv = document.createElement('div');
-            typeDiv.textContent = `Type: ${entry.type}`;
-            const timeDiv = document.createElement('div');
-            timeDiv.textContent = `Time: ${entry.time}ms`;
+            const typeSpan = document.createElement('span');
+            typeSpan.textContent = `Type: ${entry.type}`;
+            const timeSpan = document.createElement('span');
+            timeSpan.textContent = `${entry.time}ms`;
             
-            details.appendChild(statusDiv);
-            details.appendChild(methodDiv);
-            details.appendChild(typeDiv);
-            details.appendChild(timeDiv);
+            details.appendChild(typeSpan);
+            details.appendChild(timeSpan);
             
             item.appendChild(header);
+            item.appendChild(urlSpan);
             item.appendChild(details);
-            item.addEventListener('click', () => showNetworkDetails(index));
+            item.addEventListener('click', () => showNetworkDetails(actualIndex));
             networkContainer.appendChild(item);
         });
     };
+
+    // Network filter
+    const networkFilterInput = document.getElementById('networkFilter');
+    addTrackedEventListener(networkFilterInput, 'input', (e) => {
+        networkFilterText = e.target.value;
+        updateNetworkDisplay();
+    });
 
     const showNetworkDetails = (index) => {
         const entry = networkLog[index];
@@ -487,7 +1132,7 @@
         // Build content safely
         const backButton = document.createElement('button');
         backButton.className = 'back-button';
-        backButton.textContent = 'Back to Network List';
+        backButton.innerHTML = '← Back to Network List';
         backButton.addEventListener('click', () => {
             networkDetails.classList.add('hidden');
             networkContainer.classList.remove('hidden');
@@ -495,6 +1140,8 @@
         
         const heading = document.createElement('h3');
         heading.textContent = 'Request Details';
+        heading.style.margin = '0 0 10px 0';
+        heading.style.color = themeVars.text;
         
         const pre = document.createElement('pre');
         pre.textContent = `URL: ${entry.url}
@@ -690,6 +1337,7 @@ ${entry.responseBody}`;
             document.cookie = cookie.replace(/^ +/, "").replace(/=.*/, `=;expires=${new Date(0).toUTCString()};path=/`);
         });
         log("Cookies cleared", "info");
+        showToast("Cookies cleared");
     };
     addTrackedEventListener(document.getElementById("clearCookies"), "click", handleClearCookies);
 
@@ -697,6 +1345,8 @@ ${entry.responseBody}`;
         localStorage.clear();
         sessionStorage.clear();
         log("Local and Session storage cleared", "info");
+        showToast("Storage cleared");
+        updateStorageDisplay();
     };
     addTrackedEventListener(document.getElementById("clearStorage"), "click", handleClearStorage);
 
@@ -705,48 +1355,274 @@ ${entry.responseBody}`;
     };
     addTrackedEventListener(document.getElementById("reloadPage"), "click", handleReloadPage);
 
-    // About Info - use safe DOM methods
-    const aboutInfo = document.getElementById("aboutInfo");
-    const aboutTitle = document.createElement("h4");
-    aboutTitle.textContent = "About";
-    const aboutCreator = document.createElement("p");
-    aboutCreator.textContent = "Created by: Saksham Shekher";
-    const aboutGithub = document.createElement("p");
-    aboutGithub.textContent = "GitHub: ";
-    const githubLink = document.createElement("a");
-    githubLink.href = "https://github.com/OshekharO";
-    githubLink.target = "_blank";
-    githubLink.rel = "noopener noreferrer";
-    githubLink.textContent = "https://github.com/OshekharO";
-    aboutGithub.appendChild(githubLink);
-    aboutInfo.appendChild(aboutTitle);
-    aboutInfo.appendChild(aboutCreator);
-    aboutInfo.appendChild(aboutGithub);
-
-    // Device Info - use safe DOM methods
-    const deviceInfo = document.getElementById("deviceInfo");
-    const deviceTitle = document.createElement("h4");
-    deviceTitle.textContent = "Device Info";
-    deviceInfo.appendChild(deviceTitle);
+    // Storage Viewer functionality
+    const storageContainer = document.querySelector('.storage-container');
+    let currentStorageType = 'local';
     
-    const deviceInfoItems = [
-        ["User Agent", navigator.userAgent],
-        ["Platform", navigator.platform],
-        ["Screen Size", `${window.screen.width}x${window.screen.height}`],
-        ["Viewport Size", `${window.innerWidth}x${window.innerHeight}`],
-        ["Device Pixel Ratio", window.devicePixelRatio],
-        ["Browser Name", navigator.appName],
-        ["Browser Language", navigator.language]
-    ];
+    const updateStorageDisplay = () => {
+        const storage = currentStorageType === 'local' ? localStorage : sessionStorage;
+        storageContainer.innerHTML = '';
+        
+        if (storage.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'storage-empty';
+            empty.textContent = `No items in ${currentStorageType}Storage`;
+            storageContainer.appendChild(empty);
+            return;
+        }
+        
+        for (let i = 0; i < storage.length; i++) {
+            const key = storage.key(i);
+            const value = storage.getItem(key);
+            
+            const item = document.createElement('div');
+            item.className = 'storage-item';
+            
+            const keySpan = document.createElement('span');
+            keySpan.className = 'key';
+            keySpan.textContent = key;
+            
+            const valueSpan = document.createElement('span');
+            valueSpan.className = 'value';
+            // Try to format JSON values
+            try {
+                const parsed = JSON.parse(value);
+                valueSpan.textContent = safeStringify(parsed);
+            } catch {
+                valueSpan.textContent = value;
+            }
+            
+            const actions = document.createElement('div');
+            actions.className = 'actions';
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.textContent = '✕';
+            deleteBtn.addEventListener('click', () => {
+                storage.removeItem(key);
+                updateStorageDisplay();
+                log(`Removed "${key}" from ${currentStorageType}Storage`, 'info');
+            });
+            
+            actions.appendChild(deleteBtn);
+            item.appendChild(keySpan);
+            item.appendChild(valueSpan);
+            item.appendChild(actions);
+            storageContainer.appendChild(item);
+        }
+    };
     
-    deviceInfoItems.forEach(([label, value]) => {
-        const p = document.createElement("p");
-        const strong = document.createElement("strong");
-        strong.textContent = `${label}: `;
-        p.appendChild(strong);
-        p.appendChild(document.createTextNode(value));
-        deviceInfo.appendChild(p);
+    // Storage tab buttons
+    document.querySelectorAll('.storage-tab-btn').forEach(btn => {
+        addTrackedEventListener(btn, 'click', () => {
+            document.querySelectorAll('.storage-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentStorageType = btn.dataset.storage;
+            updateStorageDisplay();
+        });
     });
+    
+    addTrackedEventListener(document.getElementById('refreshStorage'), 'click', updateStorageDisplay);
+    
+    // Initialize storage display when tab is clicked
+    addTrackedEventListener(document.getElementById('navStorage'), 'click', updateStorageDisplay);
+
+    // Info tab navigation
+    const infoPanels = document.querySelectorAll('.info-panel');
+    document.querySelectorAll('.info-tab-btn').forEach(btn => {
+        addTrackedEventListener(btn, 'click', () => {
+            document.querySelectorAll('.info-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            infoPanels.forEach(p => p.classList.add('hidden'));
+            document.getElementById(btn.dataset.info + 'Info').classList.remove('hidden');
+        });
+    });
+
+    // About Info - improved design
+    const aboutInfo = document.getElementById("aboutInfo");
+    aboutInfo.innerHTML = `
+        <div class="about-logo">🛠️</div>
+        <div class="about-title">Mobile Dev Console</div>
+        <div class="about-version">v2.0.0</div>
+        <p style="color: var(--text-secondary); margin: 10px 0;">A lightweight in-browser developer console for mobile web debugging</p>
+        <p style="color: var(--text); margin: 10px 0;">Created by <strong>Saksham Shekher</strong></p>
+        <div class="about-links">
+            <a href="https://github.com/OshekharO" target="_blank" rel="noopener noreferrer" class="about-link">GitHub</a>
+            <a href="https://github.com/OshekharO/Mobile-Console" target="_blank" rel="noopener noreferrer" class="about-link">Repository</a>
+        </div>
+    `;
+
+    // Device Info - improved design with cards
+    const deviceInfo = document.getElementById("deviceInfo");
+    
+    const createInfoCard = (title, items) => {
+        const card = document.createElement('div');
+        card.className = 'info-card';
+        const cardTitle = document.createElement('h4');
+        cardTitle.textContent = title;
+        card.appendChild(cardTitle);
+        
+        items.forEach(([label, value]) => {
+            const row = document.createElement('div');
+            row.className = 'info-row';
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'label';
+            labelSpan.textContent = label;
+            const valueSpan = document.createElement('span');
+            valueSpan.className = 'value';
+            valueSpan.textContent = value;
+            row.appendChild(labelSpan);
+            row.appendChild(valueSpan);
+            card.appendChild(row);
+        });
+        
+        return card;
+    };
+    
+    // Browser info
+    deviceInfo.appendChild(createInfoCard('Browser', [
+        ['User Agent', navigator.userAgent],
+        ['Platform', navigator.platform],
+        ['Language', navigator.language],
+        ['Cookies Enabled', navigator.cookieEnabled ? 'Yes' : 'No'],
+        ['Online', navigator.onLine ? 'Yes' : 'No']
+    ]));
+    
+    // Display info
+    deviceInfo.appendChild(createInfoCard('Display', [
+        ['Screen Size', `${window.screen.width} × ${window.screen.height}`],
+        ['Viewport Size', `${window.innerWidth} × ${window.innerHeight}`],
+        ['Color Depth', `${window.screen.colorDepth}-bit`],
+        ['Pixel Ratio', window.devicePixelRatio],
+        ['Orientation', window.screen.orientation?.type || 'N/A']
+    ]));
+    
+    // Connection info (if available)
+    if (navigator.connection) {
+        deviceInfo.appendChild(createInfoCard('Connection', [
+            ['Type', navigator.connection.effectiveType || 'N/A'],
+            ['Downlink', `${navigator.connection.downlink || 'N/A'} Mbps`],
+            ['RTT', `${navigator.connection.rtt || 'N/A'} ms`],
+            ['Save Data', navigator.connection.saveData ? 'Enabled' : 'Disabled']
+        ]));
+    }
+
+    // Performance Info
+    const performanceInfo = document.getElementById("performanceInfo");
+    
+    const updatePerformanceMetrics = () => {
+        performanceInfo.innerHTML = '';
+        
+        if (window.performance && performance.timing) {
+            const timing = performance.timing;
+            const loadTime = timing.loadEventEnd - timing.navigationStart;
+            const domReady = timing.domContentLoadedEventEnd - timing.navigationStart;
+            const firstPaint = performance.getEntriesByType?.('paint')?.[0]?.startTime || 0;
+            
+            const createMetric = (icon, label, value, maxValue, unit = 'ms') => {
+                const metric = document.createElement('div');
+                metric.className = 'perf-metric';
+                
+                const iconSpan = document.createElement('span');
+                iconSpan.className = 'metric-icon';
+                iconSpan.textContent = icon;
+                
+                const info = document.createElement('div');
+                info.className = 'metric-info';
+                
+                const labelEl = document.createElement('div');
+                labelEl.className = 'metric-label';
+                labelEl.textContent = label;
+                
+                const valueEl = document.createElement('div');
+                valueEl.className = 'metric-value';
+                valueEl.textContent = value > 0 ? `${value.toFixed(0)}${unit}` : 'N/A';
+                
+                const bar = document.createElement('div');
+                bar.className = 'perf-bar';
+                const fill = document.createElement('div');
+                fill.className = 'perf-bar-fill';
+                const percent = Math.min(100, (value / maxValue) * 100);
+                fill.style.width = `${percent}%`;
+                fill.classList.add(percent < 33 ? 'good' : percent < 66 ? 'warning' : 'bad');
+                bar.appendChild(fill);
+                
+                info.appendChild(labelEl);
+                info.appendChild(valueEl);
+                info.appendChild(bar);
+                
+                metric.appendChild(iconSpan);
+                metric.appendChild(info);
+                
+                return metric;
+            };
+            
+            performanceInfo.appendChild(createInfoCard('Page Load Metrics', []));
+            const card = performanceInfo.querySelector('.info-card');
+            card.appendChild(createMetric('⏱️', 'Page Load Time', loadTime, 5000));
+            card.appendChild(createMetric('📄', 'DOM Ready', domReady, 3000));
+            card.appendChild(createMetric('🎨', 'First Paint', firstPaint, 2000));
+            card.appendChild(createMetric('🔗', 'DNS Lookup', timing.domainLookupEnd - timing.domainLookupStart, 500));
+            card.appendChild(createMetric('🤝', 'TCP Connection', timing.connectEnd - timing.connectStart, 500));
+            card.appendChild(createMetric('⬇️', 'Response Time', timing.responseEnd - timing.requestStart, 2000));
+        }
+        
+        // Memory info (Chrome only)
+        if (performance.memory) {
+            performanceInfo.appendChild(createInfoCard('Memory', [
+                ['Used JS Heap', `${(performance.memory.usedJSHeapSize / 1048576).toFixed(2)} MB`],
+                ['Total JS Heap', `${(performance.memory.totalJSHeapSize / 1048576).toFixed(2)} MB`],
+                ['Heap Limit', `${(performance.memory.jsHeapSizeLimit / 1048576).toFixed(2)} MB`]
+            ]));
+        }
+    };
+    
+    // Update performance when tab is clicked
+    addTrackedEventListener(document.getElementById('navInfo'), 'click', updatePerformanceMetrics);
+    
+    // Theme toggle functionality
+    const handleThemeToggle = () => {
+        theme = theme === 'dark' ? 'light' : 'dark';
+        themeVars = getThemeVars(theme);
+        style.textContent = getConsoleStyles(themeVars);
+        document.getElementById('themeIcon').textContent = theme === 'dark' ? '☀️' : '🌙';
+        log(`Theme switched to ${theme} mode`, 'info');
+    };
+    addTrackedEventListener(document.getElementById('themeToggle'), 'click', handleThemeToggle);
+    
+    // Resize handle functionality
+    const resizeHandle = document.getElementById('resizeHandle');
+    const consoleEl = document.getElementById('dev-console');
+    let isResizing = false;
+    let startY = 0;
+    let startHeight = 0;
+    
+    const startResize = (e) => {
+        isResizing = true;
+        startY = e.clientY || e.touches?.[0]?.clientY;
+        startHeight = consoleEl.offsetHeight;
+        document.body.style.userSelect = 'none';
+    };
+    
+    const doResize = (e) => {
+        if (!isResizing) return;
+        const clientY = e.clientY || e.touches?.[0]?.clientY;
+        const delta = startY - clientY;
+        const newHeight = Math.max(MIN_CONSOLE_HEIGHT, Math.min(window.innerHeight * MAX_CONSOLE_HEIGHT_PERCENT / 100, startHeight + delta));
+        consoleEl.style.height = `${newHeight}px`;
+    };
+    
+    const stopResize = () => {
+        isResizing = false;
+        document.body.style.userSelect = '';
+    };
+    
+    addTrackedEventListener(resizeHandle, 'mousedown', startResize);
+    addTrackedEventListener(resizeHandle, 'touchstart', startResize);
+    addTrackedEventListener(document, 'mousemove', doResize);
+    addTrackedEventListener(document, 'touchmove', doResize);
+    addTrackedEventListener(document, 'mouseup', stopResize);
+    addTrackedEventListener(document, 'touchend', stopResize);
 
     // Cleanup function for removing event listeners and restoring originals
     const cleanup = () => {
@@ -794,13 +1670,14 @@ ${entry.responseBody}`;
 
     const consoleContainer = document.getElementById('dev-console');
     const minimizeButton = document.getElementById('consoleMinimize');
+    const minimizeIcon = minimizeButton.querySelector('.nav-icon');
 
     let isMinimized = false;
 
     function toggleConsole() {
         isMinimized = !isMinimized;
         consoleContainer.classList.toggle('minimized', isMinimized);
-        minimizeButton.textContent = isMinimized ? '+' : '−';
+        minimizeIcon.textContent = isMinimized ? '+' : '−';
         if (!isMinimized) {
             const consoleTab = document.getElementById('navConsole');
             consoleTab.click();
@@ -809,5 +1686,6 @@ ${entry.responseBody}`;
 
     addTrackedEventListener(minimizeButton, 'click', toggleConsole);
     
-    log("Mobile Dev Console initialized", "info");
+    log("Mobile Dev Console v2.0 initialized", "info");
+    log("Drag the top handle to resize • Use ↑↓ keys for command history", "info");
 })();
