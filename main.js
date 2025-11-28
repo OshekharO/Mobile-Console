@@ -12,6 +12,8 @@
     const MIN_CONSOLE_HEIGHT = 100;
     const MAX_CONSOLE_HEIGHT_PERCENT = 90;
     const AUTOCOMPLETE_BLUR_DELAY_MS = 150; // Delay to allow click on autocomplete items before hiding
+    const MIN_AUTOCOMPLETE_LENGTH = 2; // Minimum characters needed to trigger autocomplete
+    const MAX_AUTOCOMPLETE_RESULTS = 10; // Maximum number of autocomplete suggestions
     
     // Console command history
     const commandHistory = [];
@@ -1711,10 +1713,10 @@
     ];
     
     const getAutocompleteItems = (input) => {
-        if (!input || input.length < 2) return [];
+        if (!input || input.length < MIN_AUTOCOMPLETE_LENGTH) return [];
         
         const lastWord = input.split(/[\s()\[\]{};,]+/).pop().toLowerCase();
-        if (!lastWord || lastWord.length < 2) return [];
+        if (!lastWord || lastWord.length < MIN_AUTOCOMPLETE_LENGTH) return [];
         
         const items = [];
         
@@ -1747,7 +1749,7 @@
         });
         
         // Limit and sort by relevance
-        return items.slice(0, 10).sort((a, b) => {
+        return items.slice(0, MAX_AUTOCOMPLETE_RESULTS).sort((a, b) => {
             // Prioritize items that start with the input
             const aStarts = a.text.toLowerCase().startsWith(lastWord);
             const bStarts = b.text.toLowerCase().startsWith(lastWord);
