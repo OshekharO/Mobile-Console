@@ -597,6 +597,7 @@
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
             -ms-overflow-style: none;
+            flex-shrink: 0;
         }
         .elements-controls::-webkit-scrollbar,
         .network-controls::-webkit-scrollbar,
