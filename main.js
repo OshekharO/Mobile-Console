@@ -72,13 +72,13 @@
             <div class="dev-console-resize-handle" id="resizeHandle"></div>
             <div class="dev-console-nav">
                 <button class="dev-console-nav-button active" id="navConsole" title="Console">
-                    <span class="nav-icon">⌘</span><span class="nav-text">Console</span>
+                    <span class="nav-icon">⌘</span><span class="nav-text">Console</span><span class="nav-badge hidden" id="consoleBadge"></span>
                 </button>
                 <button class="dev-console-nav-button" id="navElements" title="Elements">
                     <span class="nav-icon">◇</span><span class="nav-text">Elements</span>
                 </button>
                 <button class="dev-console-nav-button" id="navNetwork" title="Network">
-                    <span class="nav-icon">⇄</span><span class="nav-text">Network</span>
+                    <span class="nav-icon">⇄</span><span class="nav-text">Network</span><span class="nav-badge hidden" id="networkBadge"></span>
                 </button>
                 <button class="dev-console-nav-button" id="navStorage" title="Storage">
                     <span class="nav-icon">▤</span><span class="nav-text">Storage</span>
@@ -115,7 +115,8 @@
                     <div class="console-input-wrapper">
                         <button id="clearConsole" class="action-btn">🗑 Clear</button>
                         <button id="exportLogs" class="action-btn">📤 Export</button>
-                        <textarea id="consoleInput" placeholder="Enter JavaScript... (↑↓ for history, Tab for autocomplete)"></textarea>
+                        <textarea id="consoleInput" placeholder="Enter JavaScript… (↑↓ history, Tab autocomplete, Enter run)"></textarea>
+                        <button id="runConsole" class="action-btn run-btn" title="Run (Enter)">▶ Run</button>
                         <div id="autocompleteList" class="autocomplete-list hidden"></div>
                     </div>
                 </div>
@@ -682,6 +683,19 @@
             border-radius: 4px;
             cursor: pointer;
             font-size: 10px;
+        }
+        .storage-item .edit-btn {
+            padding: 4px 8px;
+            border: none;
+            background: var(--bg-tertiary);
+            color: var(--text);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .storage-item .edit-btn:hover {
+            background: var(--accent);
+            color: white;
         }
         .storage-empty {
             text-align: center;
@@ -1308,6 +1322,34 @@
             color: white;
             border-color: var(--accent);
         }
+        .run-btn {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            font-weight: 600;
+            min-width: 60px;
+        }
+        .run-btn:hover {
+            background: var(--accent-light);
+            border-color: var(--accent-light);
+            color: white;
+        }
+        
+        /* Nav badge */
+        .nav-badge {
+            background: var(--error);
+            color: white;
+            border-radius: 10px;
+            padding: 0 5px;
+            font-size: 9px;
+            min-width: 16px;
+            text-align: center;
+            line-height: 16px;
+            height: 16px;
+            display: inline-block;
+            font-weight: 700;
+            margin-left: 2px;
+        }
         .computed-filter-input {
             width: 100%;
             padding: 8px 10px;
@@ -1483,11 +1525,42 @@
     style.textContent = consoleStyles;
     document.head.appendChild(style);
 
+    // Set initial theme icon to match the detected/current theme
+    document.getElementById('themeIcon').textContent = theme === 'dark' ? '☀️' : '🌙';
+
     // Console functionality
     const consoleOutput = document.querySelector(".console-output");
     const consoleInput = document.getElementById("consoleInput");
     let currentLogFilter = 'all';
     let currentTextFilter = '';
+
+    // Badge counters (unseen errors / network requests)
+    let unseenErrors = 0;
+    let unseenNetwork = 0;
+    let isOnConsoleTab = true;
+    let isOnNetworkTab = false;
+
+    const updateConsoleBadge = () => {
+        const badge = document.getElementById('consoleBadge');
+        if (!badge) return;
+        if (unseenErrors > 0 && !isOnConsoleTab) {
+            badge.textContent = unseenErrors > 99 ? '99+' : String(unseenErrors);
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    };
+
+    const updateNetworkBadge = () => {
+        const badge = document.getElementById('networkBadge');
+        if (!badge) return;
+        if (unseenNetwork > 0 && !isOnNetworkTab) {
+            badge.textContent = unseenNetwork > 99 ? '99+' : String(unseenNetwork);
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    };
 
     // Toast notification helper
     const showToast = (message) => {
@@ -1609,6 +1682,12 @@
         while (consoleOutput.children.length >= MAX_CONSOLE_ENTRIES) {
             consoleOutput.removeChild(consoleOutput.firstChild);
         }
+
+        // Increment unseen error badge when user is not on console tab
+        if (type === 'error' && !isOnConsoleTab) {
+            unseenErrors++;
+            updateConsoleBadge();
+        }
         
         const entry = document.createElement("div");
         entry.className = `console-entry ${type}`;
@@ -1686,6 +1765,8 @@
 
     const clearConsole = () => {
         consoleOutput.innerHTML = "";
+        unseenErrors = 0;
+        updateConsoleBadge();
         log("Console cleared", "info");
     };
 
@@ -1836,6 +1917,10 @@
     };
     
     addTrackedEventListener(consoleInput, 'input', () => {
+        // Auto-resize textarea
+        consoleInput.style.height = 'auto';
+        consoleInput.style.height = Math.min(consoleInput.scrollHeight, 100) + 'px';
+        // Show autocomplete
         const items = getAutocompleteItems(consoleInput.value);
         showAutocomplete(items);
     });
@@ -1922,23 +2007,7 @@
         
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            const code = consoleInput.value.trim();
-            if (!code) return;
-            
-            // Add to history
-            if (commandHistory[commandHistory.length - 1] !== code) {
-                commandHistory.push(code);
-            }
-            historyIndex = commandHistory.length;
-            
-            log(`> ${code}`, "input");
-            try {
-                const result = eval(code);
-                log(typeof result === 'undefined' ? 'undefined' : (typeof result === "object" ? safeStringify(result) : String(result)));
-            } catch (error) {
-                log(`Error: ${error.message}`, "error");
-            }
-            consoleInput.value = "";
+            submitConsoleInput();
         } else if (e.key === "ArrowUp") {
             e.preventDefault();
             if (historyIndex > 0) {
@@ -1958,6 +2027,38 @@
     };
     addTrackedEventListener(consoleInput, "keydown", handleConsoleInput);
 
+    // Shared code execution helper used by both Enter key and Run button
+    const executeCode = (code) => {
+        if (commandHistory[commandHistory.length - 1] !== code) {
+            commandHistory.push(code);
+        }
+        historyIndex = commandHistory.length;
+
+        log(`> ${code}`, "input");
+        try {
+            const result = eval(code);
+            log(typeof result === 'undefined' ? 'undefined' : (typeof result === "object" ? safeStringify(result) : String(result)));
+        } catch (error) {
+            log(`Error: ${error.message}`, "error");
+        }
+        consoleInput.value = "";
+        consoleInput.style.height = 'auto';
+        hideAutocomplete();
+    };
+
+    const submitConsoleInput = () => {
+        const code = consoleInput.value.trim();
+        if (!code) return;
+        executeCode(code);
+    };
+
+    // Run button handler
+    const runConsoleCode = () => {
+        submitConsoleInput();
+        consoleInput.focus();
+    };
+    addTrackedEventListener(document.getElementById('runConsole'), 'click', runConsoleCode);
+
     // Navigation functionality
     const navButtons = document.querySelectorAll(".dev-console-nav-button:not(.nav-action)");
     const sections = document.querySelectorAll(".dev-console-section");
@@ -1968,6 +2069,22 @@
         document.getElementById(targetId)?.classList.remove("hidden");
         navButtons.forEach((btn) => btn.classList.remove("active"));
         button.classList.add("active");
+
+        // Clear unseen badges when the user visits the tab
+        if (button.id === 'navConsole') {
+            isOnConsoleTab = true;
+            isOnNetworkTab = false;
+            unseenErrors = 0;
+            updateConsoleBadge();
+        } else if (button.id === 'navNetwork') {
+            isOnNetworkTab = true;
+            isOnConsoleTab = false;
+            unseenNetwork = 0;
+            updateNetworkBadge();
+        } else {
+            isOnConsoleTab = false;
+            isOnNetworkTab = false;
+        }
     };
     
     navButtons.forEach((button) => {
@@ -2537,6 +2654,13 @@
             networkLog.shift();
         }
         networkLog.push(entry);
+
+        // Increment unseen network badge when user is not on the network tab
+        if (!isOnNetworkTab) {
+            unseenNetwork++;
+            updateNetworkBadge();
+        }
+
         updateNetworkDisplay();
     };
     
@@ -2630,9 +2754,8 @@
         heading.textContent = 'Request Details';
         heading.style.margin = '0 0 10px 0';
         heading.style.color = themeVars.text;
-        
-        const pre = document.createElement('pre');
-        pre.textContent = `URL: ${entry.url}
+
+        const detailsText = `URL: ${entry.url}
 Method: ${entry.method}
 Status: ${entry.status}
 Type: ${entry.type}
@@ -2649,10 +2772,20 @@ ${formatHeaders(entry.responseHeaders)}
 
 Response Body:
 ${entry.responseBody}`;
+
+        const copyDetailsBtn = document.createElement('button');
+        copyDetailsBtn.className = 'action-btn';
+        copyDetailsBtn.style.marginBottom = '8px';
+        copyDetailsBtn.textContent = '📋 Copy Details';
+        copyDetailsBtn.addEventListener('click', () => copyToClipboard(detailsText));
+        
+        const pre = document.createElement('pre');
+        pre.textContent = detailsText;
         
         networkDetails.innerHTML = '';
         networkDetails.appendChild(backButton);
         networkDetails.appendChild(heading);
+        networkDetails.appendChild(copyDetailsBtn);
         networkDetails.appendChild(pre);
         networkDetails.classList.remove('hidden');
         networkContainer.classList.add('hidden');
@@ -2896,6 +3029,20 @@ ${entry.responseBody}`;
             const actions = document.createElement('div');
             actions.className = 'actions';
             
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-btn';
+            editBtn.textContent = '✏️';
+            editBtn.title = 'Edit value';
+            editBtn.addEventListener('click', async () => {
+                const currentValue = storage.getItem(key) || '';
+                const newValue = await showPrompt(`Edit "${key}"`, currentValue, 'Enter new value…');
+                if (newValue !== null) {
+                    storage.setItem(key, newValue);
+                    updateStorageDisplay();
+                    log(`Updated "${key}" in ${currentStorageType}Storage`, 'info');
+                }
+            });
+
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'delete-btn';
             deleteBtn.textContent = '✕';
@@ -2905,6 +3052,7 @@ ${entry.responseBody}`;
                 log(`Removed "${key}" from ${currentStorageType}Storage`, 'info');
             });
             
+            actions.appendChild(editBtn);
             actions.appendChild(deleteBtn);
             item.appendChild(keySpan);
             item.appendChild(valueSpan);
@@ -3109,7 +3257,7 @@ ${entry.responseBody}`;
     aboutInfo.innerHTML = `
         <div class="about-logo">🛠️</div>
         <div class="about-title">Mobile Dev Console</div>
-        <div class="about-version">v2.1.0</div>
+        <div class="about-version">v3.0.0</div>
         <p style="color: var(--text-secondary); margin: 10px 0;">A lightweight in-browser developer console for mobile web debugging</p>
         <p style="color: var(--text); margin: 10px 0;">Created by <strong>Saksham Shekher</strong></p>
         <div class="about-links">
@@ -3148,7 +3296,7 @@ ${entry.responseBody}`;
     // Browser info
     deviceInfo.appendChild(createInfoCard('Browser', [
         ['User Agent', navigator.userAgent],
-        ['Platform', navigator.platform],
+        ['Platform', navigator.userAgentData?.platform || navigator.platform],
         ['Language', navigator.language],
         ['Cookies Enabled', navigator.cookieEnabled ? 'Yes' : 'No'],
         ['Online', navigator.onLine ? 'Yes' : 'No']
@@ -3323,8 +3471,12 @@ ${entry.responseBody}`;
         document.body.classList.remove('selecting-element');
         
         // Restore original console methods
-        ["log", "error", "warn", "info"].forEach((method) => {
-            console[method] = originalConsole[method];
+        ["log", "error", "warn", "info", "table", "clear", "assert", "dir",
+         "count", "countReset", "time", "timeEnd", "timeLog",
+         "group", "groupCollapsed", "groupEnd"].forEach((method) => {
+            if (originalConsole[method] !== undefined) {
+                console[method] = originalConsole[method];
+            }
         });
         
         // Restore original fetch
@@ -3347,7 +3499,12 @@ ${entry.responseBody}`;
     addTrackedEventListener(document.getElementById("consoleExit"), "click", handleConsoleExit);
 
     // Override console methods - call original and log to dev console
-    const originalConsole = { ...console };
+    // Explicitly capture all methods we will override so cleanup can reliably restore them.
+    const consoleMethods = ["log", "error", "warn", "info", "table", "clear", "assert", "dir",
+        "count", "countReset", "time", "timeEnd", "timeLog", "group", "groupCollapsed", "groupEnd"];
+    const originalConsole = {};
+    consoleMethods.forEach(m => { originalConsole[m] = console[m]?.bind(console); });
+
     ["log", "error", "warn", "info"].forEach((method) => {
         console[method] = (...args) => {
             // Call original console method to maintain devtools functionality
@@ -3357,6 +3514,89 @@ ${entry.responseBody}`;
             return args.length <= 1 ? args[0] : args;
         };
     });
+
+    // console.table
+    console.table = (...args) => {
+        originalConsole.table?.apply(console, args);
+        const data = args[0];
+        log('[Table] ' + (data && typeof data === 'object' ? safeStringify(data) : String(data)), 'log');
+    };
+
+    // console.clear
+    console.clear = () => {
+        originalConsole.clear?.apply(console);
+        clearConsole();
+    };
+
+    // console.assert
+    console.assert = (condition, ...args) => {
+        originalConsole.assert?.apply(console, [condition, ...args]);
+        if (!condition) {
+            const message = args.length
+                ? args.map(a => (typeof a === 'object' ? safeStringify(a) : String(a))).join(' ')
+                : 'Assertion failed';
+            log(`Assertion failed: ${message}`, 'error');
+        }
+    };
+
+    // console.dir
+    console.dir = (obj, ...args) => {
+        originalConsole.dir?.apply(console, [obj, ...args]);
+        log(typeof obj === 'object' ? safeStringify(obj) : String(obj), 'log');
+    };
+
+    // console.count / countReset
+    const consoleCounts = {};
+    console.count = (label = 'default') => {
+        originalConsole.count?.apply(console, [label]);
+        consoleCounts[label] = (consoleCounts[label] || 0) + 1;
+        log(`${label}: ${consoleCounts[label]}`, 'log');
+    };
+    console.countReset = (label = 'default') => {
+        originalConsole.countReset?.apply(console, [label]);
+        consoleCounts[label] = 0;
+        log(`${label}: 0`, 'log');
+    };
+
+    // console.time / timeEnd / timeLog
+    const consoleTimers = {};
+    console.time = (label = 'default') => {
+        originalConsole.time?.apply(console, [label]);
+        consoleTimers[label] = performance.now();
+    };
+    console.timeEnd = (label = 'default') => {
+        originalConsole.timeEnd?.apply(console, [label]);
+        if (consoleTimers[label] !== undefined) {
+            const elapsed = (performance.now() - consoleTimers[label]).toFixed(2);
+            log(`${label}: ${elapsed}ms`, 'log');
+            delete consoleTimers[label];
+        }
+    };
+    console.timeLog = (label = 'default', ...args) => {
+        originalConsole.timeLog?.apply(console, [label, ...args]);
+        if (consoleTimers[label] !== undefined) {
+            const elapsed = (performance.now() - consoleTimers[label]).toFixed(2);
+            const extra = args.map(a => (typeof a === 'object' ? safeStringify(a) : String(a))).join(' ');
+            log(`${label}: ${elapsed}ms${extra ? ' ' + extra : ''}`, 'log');
+        }
+    };
+
+    // console.group / groupCollapsed / groupEnd (simplified flat display)
+    let consoleGroupDepth = 0;
+    console.group = (...args) => {
+        originalConsole.group?.apply(console, args);
+        consoleGroupDepth++;
+        log(`${'  '.repeat(consoleGroupDepth - 1)}▼ ${args.map(a => (typeof a === 'object' ? safeStringify(a) : String(a))).join(' ')}`, 'log');
+    };
+    console.groupCollapsed = (...args) => {
+        originalConsole.groupCollapsed?.apply(console, args);
+        consoleGroupDepth++;
+        log(`${'  '.repeat(consoleGroupDepth - 1)}▶ ${args.map(a => (typeof a === 'object' ? safeStringify(a) : String(a))).join(' ')}`, 'log');
+    };
+    console.groupEnd = () => {
+        originalConsole.groupEnd?.apply(console);
+        if (consoleGroupDepth > 0) consoleGroupDepth--;
+    };
 
     const minimizeButton = document.getElementById('consoleMinimize');
     const minimizeIcon = minimizeButton.querySelector('.nav-icon');
@@ -3413,6 +3653,6 @@ ${entry.responseBody}`;
     
     addTrackedEventListener(document, 'keydown', handleGlobalKeydown);
     
-    log("Mobile Dev Console v2.1.0 initialized", "info");
+    log("Mobile Dev Console v3.0.0 initialized", "info");
     log("Shortcuts: Escape to minimize • Cmd/Ctrl+K to clear • Tab for autocomplete", "info");
 })();
