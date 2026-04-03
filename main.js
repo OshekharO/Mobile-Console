@@ -1,4 +1,11 @@
 (() => {
+    // Prevent double-injection: if the console already exists, toggle its visibility and exit
+    const existingConsole = document.getElementById('dev-console');
+    if (existingConsole) {
+        existingConsole.classList.toggle('hidden');
+        return;
+    }
+
     // Check if the system is in dark mode
     function isDarkMode() {
         return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -39,18 +46,24 @@
         }
     };
     
-    // Helper to safely stringify objects (handles circular references)
+    // Helper to safely stringify objects (handles circular references, BigInt, functions, symbols)
     const safeStringify = (obj) => {
         const seen = new WeakSet();
-        return JSON.stringify(obj, (key, value) => {
-            if (typeof value === 'object' && value !== null) {
-                if (seen.has(value)) {
-                    return '[Circular]';
+        try {
+            return JSON.stringify(obj, (key, value) => {
+                if (typeof value === 'bigint') return `${value}n`;
+                if (typeof value === 'function') return `[Function: ${value.name || 'anonymous'}]`;
+                if (typeof value === 'symbol') return value.toString();
+                if (typeof value === 'undefined') return '[undefined]';
+                if (typeof value === 'object' && value !== null) {
+                    if (seen.has(value)) return '[Circular]';
+                    seen.add(value);
                 }
-                seen.add(value);
-            }
-            return value;
-        }, 2);
+                return value;
+            }, 2);
+        } catch (e) {
+            return String(obj);
+        }
     };
 
     // HTML template for the dev console
@@ -204,7 +217,6 @@
         textSecondary: '#6b7280',
         border: '#e5e7eb',
         borderLight: '#f3f4f6',
-        borderDark: '#d1d5db',
         activeBg: '#ffffff',
         accent: '#3b82f6',
         accentLight: '#60a5fa',
@@ -220,7 +232,6 @@
         textSecondary: '#94a3b8',
         border: '#334155',
         borderLight: '#475569',
-        borderDark: '#1e293b',
         activeBg: '#1e293b',
         accent: '#60a5fa',
         accentLight: '#93c5fd',
@@ -555,6 +566,7 @@
         .autocomplete-item .type.keyword { background: #dbeafe; color: var(--accent); }
         .autocomplete-item .type.method { background: #d1fae5; color: var(--success); }
         .autocomplete-item .type.property { background: #fef3c7; color: var(--warning); }
+        .autocomplete-item .type.history { background: #f3e8ff; color: #7c3aed; }
         
         /* Action buttons */
         .action-btn {
@@ -1875,8 +1887,10 @@
         if (!autocompleteList.classList.contains('hidden')) {
             if (e.key === 'Tab' || (e.key === 'ArrowDown' && autocompleteItems.length > 0)) {
                 e.preventDefault();
-                autocompleteIndex = (autocompleteIndex + 1) % autocompleteItems.length;
-                updateAutocompleteSelection();
+                if (autocompleteItems.length > 0) {
+                    autocompleteIndex = (autocompleteIndex + 1) % autocompleteItems.length;
+                    updateAutocompleteSelection();
+                }
                 return;
             }
             if (e.key === 'ArrowUp' && autocompleteItems.length > 0) {
@@ -1894,6 +1908,16 @@
                 hideAutocomplete();
                 return;
             }
+        } else if (e.key === 'Tab') {
+            // Tab with autocomplete hidden: show suggestions if input has content
+            e.preventDefault();
+            const items = getAutocompleteItems(consoleInput.value);
+            if (items.length > 0) {
+                showAutocomplete(items);
+                autocompleteIndex = 0;
+                updateAutocompleteSelection();
+            }
+            return;
         }
         
         if (e.key === "Enter" && !e.shiftKey) {
@@ -2055,8 +2079,9 @@
         if (!element || !inspectorOverlay || !inspectorLabel) return;
         
         const rect = element.getBoundingClientRect();
-        inspectorOverlay.style.left = `${rect.left + window.scrollX}px`;
-        inspectorOverlay.style.top = `${rect.top + window.scrollY}px`;
+        // position:fixed is relative to the viewport, so use rect coordinates directly
+        inspectorOverlay.style.left = `${rect.left}px`;
+        inspectorOverlay.style.top = `${rect.top}px`;
         inspectorOverlay.style.width = `${rect.width}px`;
         inspectorOverlay.style.height = `${rect.height}px`;
         
@@ -2064,9 +2089,9 @@
         const size = `${Math.round(rect.width)} × ${Math.round(rect.height)}`;
         inspectorLabel.textContent = `${selector} (${size})`;
         
-        // Position label above or below element
-        const labelTop = rect.top > 30 ? rect.top + window.scrollY - 25 : rect.bottom + window.scrollY + 5;
-        inspectorLabel.style.left = `${Math.max(5, rect.left + window.scrollX)}px`;
+        // Position label above or below element (no scroll offset needed for fixed positioning)
+        const labelTop = rect.top > 30 ? rect.top - 25 : rect.bottom + 5;
+        inspectorLabel.style.left = `${Math.max(5, rect.left)}px`;
         inspectorLabel.style.top = `${labelTop}px`;
     };
     
@@ -2181,7 +2206,9 @@
     
     addTrackedEventListener(selectElementBtn, 'click', toggleSelectElement);
     
-    // Build breadcrumb path
+    // Build breadcrumb path — uses event delegation to avoid listener leaks
+    let breadcrumbPathElements = [];
+    
     const buildBreadcrumb = (element) => {
         elementBreadcrumb.innerHTML = '';
         elementBreadcrumb.classList.remove('hidden');
@@ -2194,6 +2221,9 @@
             }
             current = current.parentNode;
         }
+        
+        // Store path for the delegated click handler
+        breadcrumbPathElements = path;
         
         path.forEach((el, index) => {
             if (index > 0) {
@@ -2209,11 +2239,19 @@
                 item.classList.add('active');
             }
             item.textContent = getElementSelector(el);
-            const clickHandler = () => selectElement(el);
-            addTrackedEventListener(item, 'click', clickHandler);
+            item.dataset.pathIndex = String(index);
             elementBreadcrumb.appendChild(item);
         });
     };
+    
+    // Single delegated listener for all breadcrumb clicks — registered once
+    addTrackedEventListener(elementBreadcrumb, 'click', (e) => {
+        const item = e.target.closest('.breadcrumb-item');
+        if (!item) return;
+        const index = parseInt(item.dataset.pathIndex, 10);
+        const el = breadcrumbPathElements[index];
+        if (el) selectElement(el);
+    });
     
     // Display element attributes
     const displayAttributes = (element) => {
@@ -2503,7 +2541,7 @@
     };
     
     const getStatusClass = (status) => {
-        if (status === 'Error' || status >= 400) return 'error';
+        if (status === 'Error' || status === 'Aborted' || status >= 400) return 'error';
         if (status >= 300) return 'redirect';
         return 'success';
     };
@@ -2643,21 +2681,26 @@ ${entry.responseBody}`;
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
         const start = performance.now();
+        // args[0] may be a string URL or a Request object
+        const isRequestObj = args[0] instanceof Request;
+        const requestUrl = isRequestObj ? args[0].url : String(args[0]);
+        const requestOptions = isRequestObj ? args[0] : (args[1] || {});
+        const requestMethod = (isRequestObj ? args[0].method : args[1]?.method) || 'GET';
+
         try {
-            const request = args[1] || {};
             let requestBody = 'No request body';
-            if (request.body) {
-                if (typeof request.body === 'string') {
-                    requestBody = request.body;
-                } else if (request.body instanceof FormData) {
+            if (requestOptions.body) {
+                if (typeof requestOptions.body === 'string') {
+                    requestBody = requestOptions.body;
+                } else if (requestOptions.body instanceof FormData) {
                     requestBody = '[FormData]';
-                } else if (request.body instanceof URLSearchParams) {
-                    requestBody = request.body.toString();
-                } else if (request.body instanceof Blob) {
+                } else if (requestOptions.body instanceof URLSearchParams) {
+                    requestBody = requestOptions.body.toString();
+                } else if (requestOptions.body instanceof Blob) {
                     requestBody = '[Blob]';
                 } else {
                     try {
-                        requestBody = safeStringify(request.body);
+                        requestBody = safeStringify(requestOptions.body);
                     } catch (e) {
                         requestBody = '[Unable to stringify request body]';
                     }
@@ -2669,12 +2712,12 @@ ${entry.responseBody}`;
             const clone = response.clone();
             const responseBody = await clone.text();
             addNetworkEntry({
-                url: String(args[0]),
-                method: request.method || 'GET',
+                url: requestUrl,
+                method: requestMethod,
                 status: response.status,
                 type: 'fetch',
                 time: time.toFixed(2),
-                requestHeaders: request.headers || {},
+                requestHeaders: requestOptions.headers || {},
                 requestBody: requestBody,
                 responseHeaders: Object.fromEntries(response.headers.entries()),
                 responseBody: responseBody
@@ -2682,12 +2725,12 @@ ${entry.responseBody}`;
             return response;
         } catch (error) {
             addNetworkEntry({
-                url: String(args[0]),
-                method: args[1]?.method || 'GET',
+                url: requestUrl,
+                method: requestMethod,
                 status: 'Error',
                 type: 'fetch',
                 time: (performance.now() - start).toFixed(2),
-                requestHeaders: args[1]?.headers || {},
+                requestHeaders: requestOptions.headers || {},
                 requestBody: 'No request body',
                 responseHeaders: {},
                 responseBody: error.message
@@ -2717,7 +2760,7 @@ ${entry.responseBody}`;
         originalXHRSetRequestHeader.apply(this, arguments);
     };
     
-    const handleXHRResponse = function(isError = false) {
+    const handleXHRResponse = function(statusOverride) {
         if (!this._networkInfo) return;
         
         const time = performance.now() - this._networkInfo.start;
@@ -2727,6 +2770,8 @@ ${entry.responseBody}`;
                 requestBody = this._networkInfo.body;
             } else if (this._networkInfo.body instanceof FormData) {
                 requestBody = '[FormData]';
+            } else if (this._networkInfo.body instanceof URLSearchParams) {
+                requestBody = this._networkInfo.body.toString();
             } else if (this._networkInfo.body instanceof Blob) {
                 requestBody = '[Blob]';
             } else {
@@ -2737,16 +2782,19 @@ ${entry.responseBody}`;
                 }
             }
         }
+        const isAbnormal = statusOverride !== undefined;
         addNetworkEntry({
             url: this._networkInfo.url,
             method: this._networkInfo.method,
-            status: isError ? 'Error' : this.status,
+            status: isAbnormal ? statusOverride : this.status,
             type: 'xhr',
             time: time.toFixed(2),
             requestHeaders: this._networkInfo.requestHeaders,
             requestBody: requestBody,
-            responseHeaders: parseResponseHeaders(this.getAllResponseHeaders()),
-            responseBody: isError ? 'Network Error' : this.responseText
+            responseHeaders: isAbnormal ? {} : parseResponseHeaders(this.getAllResponseHeaders()),
+            responseBody: statusOverride === 'Error' ? 'Network Error' :
+                          statusOverride === 'Aborted' ? 'Request Aborted' :
+                          this.responseText
         });
     };
 
@@ -2755,10 +2803,13 @@ ${entry.responseBody}`;
             this._networkInfo.body = body;
         }
         this.addEventListener('load', function() {
-            handleXHRResponse.call(this, false);
+            handleXHRResponse.call(this);
         });
         this.addEventListener('error', function() {
-            handleXHRResponse.call(this, true);
+            handleXHRResponse.call(this, 'Error');
+        });
+        this.addEventListener('abort', function() {
+            handleXHRResponse.call(this, 'Aborted');
         });
         originalXHRSend.apply(this, arguments);
     };
@@ -3128,12 +3179,28 @@ ${entry.responseBody}`;
     const updatePerformanceMetrics = () => {
         performanceInfo.innerHTML = '';
         
-        if (window.performance && performance.timing) {
-            const timing = performance.timing;
-            const loadTime = timing.loadEventEnd - timing.navigationStart;
-            const domReady = timing.domContentLoadedEventEnd - timing.navigationStart;
-            const firstPaint = performance.getEntriesByType?.('paint')?.[0]?.startTime || 0;
-            
+        // Prefer Navigation Timing Level 2; fall back to deprecated Level 1
+        const nt2 = performance.getEntriesByType?.('navigation')?.[0];
+        const timing = performance.timing;
+        const firstPaint = performance.getEntriesByType?.('paint')?.[0]?.startTime || 0;
+
+        const navTiming = nt2 ? {
+            loadTime:     nt2.loadEventEnd,
+            domReady:     nt2.domContentLoadedEventEnd,
+            firstPaint,
+            dnsLookup:    nt2.domainLookupEnd - nt2.domainLookupStart,
+            tcpConnect:   nt2.connectEnd - nt2.connectStart,
+            responseTime: nt2.responseEnd - nt2.requestStart
+        } : timing ? {
+            loadTime:     timing.loadEventEnd - timing.navigationStart,
+            domReady:     timing.domContentLoadedEventEnd - timing.navigationStart,
+            firstPaint,
+            dnsLookup:    timing.domainLookupEnd - timing.domainLookupStart,
+            tcpConnect:   timing.connectEnd - timing.connectStart,
+            responseTime: timing.responseEnd - timing.requestStart
+        } : null;
+
+        if (navTiming) {
             const createMetric = (icon, label, value, maxValue, unit = 'ms') => {
                 const metric = document.createElement('div');
                 metric.className = 'perf-metric';
@@ -3174,12 +3241,12 @@ ${entry.responseBody}`;
             
             performanceInfo.appendChild(createInfoCard('Page Load Metrics', []));
             const card = performanceInfo.querySelector('.info-card');
-            card.appendChild(createMetric('⏱️', 'Page Load Time', loadTime, 5000));
-            card.appendChild(createMetric('📄', 'DOM Ready', domReady, 3000));
-            card.appendChild(createMetric('🎨', 'First Paint', firstPaint, 2000));
-            card.appendChild(createMetric('🔗', 'DNS Lookup', timing.domainLookupEnd - timing.domainLookupStart, 500));
-            card.appendChild(createMetric('🤝', 'TCP Connection', timing.connectEnd - timing.connectStart, 500));
-            card.appendChild(createMetric('⬇️', 'Response Time', timing.responseEnd - timing.requestStart, 2000));
+            card.appendChild(createMetric('⏱️', 'Page Load Time', navTiming.loadTime, 5000));
+            card.appendChild(createMetric('📄', 'DOM Ready', navTiming.domReady, 3000));
+            card.appendChild(createMetric('🎨', 'First Paint', navTiming.firstPaint, 2000));
+            card.appendChild(createMetric('🔗', 'DNS Lookup', navTiming.dnsLookup, 500));
+            card.appendChild(createMetric('🤝', 'TCP Connection', navTiming.tcpConnect, 500));
+            card.appendChild(createMetric('⬇️', 'Response Time', navTiming.responseTime, 2000));
         }
         
         // Memory info (Chrome only)
@@ -3221,6 +3288,7 @@ ${entry.responseBody}`;
     
     const doResize = (e) => {
         if (!isResizing) return;
+        e.preventDefault(); // Prevent page scroll while resizing on touch
         const clientY = e.clientY || e.touches?.[0]?.clientY;
         const delta = startY - clientY;
         const newHeight = Math.max(MIN_CONSOLE_HEIGHT, Math.min(window.innerHeight * MAX_CONSOLE_HEIGHT_PERCENT / 100, startHeight + delta));
@@ -3233,9 +3301,9 @@ ${entry.responseBody}`;
     };
     
     addTrackedEventListener(resizeHandle, 'mousedown', startResize);
-    addTrackedEventListener(resizeHandle, 'touchstart', startResize);
+    addTrackedEventListener(resizeHandle, 'touchstart', startResize, { passive: false });
     addTrackedEventListener(document, 'mousemove', doResize);
-    addTrackedEventListener(document, 'touchmove', doResize);
+    addTrackedEventListener(document, 'touchmove', doResize, { passive: false });
     addTrackedEventListener(document, 'mouseup', stopResize);
     addTrackedEventListener(document, 'touchend', stopResize);
 
@@ -3290,7 +3358,6 @@ ${entry.responseBody}`;
         };
     });
 
-    const consoleContainer = document.getElementById('dev-console');
     const minimizeButton = document.getElementById('consoleMinimize');
     const minimizeIcon = minimizeButton.querySelector('.nav-icon');
 
@@ -3298,7 +3365,7 @@ ${entry.responseBody}`;
 
     function toggleConsole() {
         isMinimized = !isMinimized;
-        consoleContainer.classList.toggle('minimized', isMinimized);
+        consoleEl.classList.toggle('minimized', isMinimized);
         minimizeIcon.textContent = isMinimized ? '+' : '−';
         if (!isMinimized) {
             const consoleTab = document.getElementById('navConsole');
