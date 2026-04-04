@@ -1,10 +1,8 @@
 (() => {
-    // Prevent double-injection: if the console host already exists, toggle visibility and exit
-    const existingHost = document.getElementById('dev-console-host');
-    if (existingHost) {
-        const existingShadow = existingHost.shadowRoot;
-        const existingConsole = existingShadow && existingShadow.getElementById('dev-console');
-        if (existingConsole) existingConsole.classList.toggle('hidden');
+    // Prevent double-injection: if the console already exists, toggle its visibility and exit
+    const existingConsole = document.getElementById('dev-console');
+    if (existingConsole) {
+        existingConsole.classList.toggle('hidden');
         return;
     }
 
@@ -270,7 +268,7 @@
             height: 50%;
             background: var(--bg);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            z-index: 2147483647;
+            z-index: 10000;
             display: flex;
             flex-direction: column;
             box-shadow: 0 -4px 20px var(--shadow);
@@ -1515,37 +1513,24 @@
     
     let consoleStyles = getConsoleStyles(themeVars);
 
-    // Inject HTML and CSS via Shadow DOM for CSP and style isolation
-    const targetEl = document.body || document.documentElement;
-    const host = document.createElement('div');
-    host.id = 'dev-console-host';
-    // 'all:initial' prevents any page styles from affecting the host element itself;
-    // shadow DOM content is styled independently via adoptedStyleSheets below.
-    host.style.cssText = 'all:initial;display:block;';
-    targetEl.appendChild(host);
-    const shadowRoot = host.attachShadow({ mode: 'open' });
-    const hostDiv = document.createElement('div');
-    hostDiv.innerHTML = consoleHTML.trim();
-    shadowRoot.appendChild(hostDiv.firstChild);
+    // Inject HTML and CSS into the document
+    const injectElement = (html) => {
+        const div = document.createElement("div");
+        div.innerHTML = html.trim();
+        return div.firstChild;
+    };
 
-    // Apply styles via Constructable Stylesheets (CSP-compatible) with <style> fallback
-    let shadowStyleSheet;
-    try {
-        shadowStyleSheet = new CSSStyleSheet();
-        shadowStyleSheet.replaceSync(consoleStyles);
-        shadowRoot.adoptedStyleSheets = [shadowStyleSheet];
-    } catch (e) {
-        shadowStyleSheet = document.createElement('style');
-        shadowStyleSheet.textContent = consoleStyles;
-        shadowRoot.insertBefore(shadowStyleSheet, shadowRoot.firstChild);
-    }
+    document.body.appendChild(injectElement(consoleHTML));
+    const style = document.createElement("style");
+    style.textContent = consoleStyles;
+    document.head.appendChild(style);
 
     // Set initial theme icon to match the detected/current theme
-    shadowRoot.getElementById('themeIcon').textContent = theme === 'dark' ? '☀️' : '🌙';
+    document.getElementById('themeIcon').textContent = theme === 'dark' ? '☀️' : '🌙';
 
     // Console functionality
-    const consoleOutput = shadowRoot.querySelector(".console-output");
-    const consoleInput = shadowRoot.getElementById("consoleInput");
+    const consoleOutput = document.querySelector(".console-output");
+    const consoleInput = document.getElementById("consoleInput");
     let currentLogFilter = 'all';
     let currentTextFilter = '';
 
@@ -1556,7 +1541,7 @@
     let isOnNetworkTab = false;
 
     const updateConsoleBadge = () => {
-        const badge = shadowRoot.getElementById('consoleBadge');
+        const badge = document.getElementById('consoleBadge');
         if (!badge) return;
         if (unseenErrors > 0 && !isOnConsoleTab) {
             badge.textContent = unseenErrors > 99 ? '99+' : String(unseenErrors);
@@ -1567,7 +1552,7 @@
     };
 
     const updateNetworkBadge = () => {
-        const badge = shadowRoot.getElementById('networkBadge');
+        const badge = document.getElementById('networkBadge');
         if (!badge) return;
         if (unseenNetwork > 0 && !isOnNetworkTab) {
             badge.textContent = unseenNetwork > 99 ? '99+' : String(unseenNetwork);
@@ -1582,7 +1567,7 @@
         const toast = document.createElement('div');
         toast.className = 'dev-console-toast';
         toast.textContent = message;
-        shadowRoot.appendChild(toast);
+        document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 2000);
     };
 
@@ -1663,7 +1648,7 @@
             
             modal.appendChild(buttons);
             overlay.appendChild(modal);
-            shadowRoot.appendChild(overlay);
+            document.body.appendChild(overlay);
             
             if (inputEl) {
                 inputEl.focus();
@@ -1762,9 +1747,9 @@
     };
 
     // Filter buttons
-    shadowRoot.querySelectorAll('.filter-btn').forEach(btn => {
+    document.querySelectorAll('.filter-btn').forEach(btn => {
         addTrackedEventListener(btn, 'click', () => {
-            shadowRoot.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentLogFilter = btn.dataset.filter;
             applyConsoleFilters();
@@ -1772,7 +1757,7 @@
     });
 
     // Text filter
-    const consoleFilterInput = shadowRoot.getElementById('consoleFilter');
+    const consoleFilterInput = document.getElementById('consoleFilter');
     addTrackedEventListener(consoleFilterInput, 'input', (e) => {
         currentTextFilter = e.target.value;
         applyConsoleFilters();
@@ -1785,10 +1770,10 @@
         log("Console cleared", "info");
     };
 
-    addTrackedEventListener(shadowRoot.getElementById("clearConsole"), "click", clearConsole);
+    addTrackedEventListener(document.getElementById("clearConsole"), "click", clearConsole);
 
     // Autocomplete functionality
-    const autocompleteList = shadowRoot.getElementById('autocompleteList');
+    const autocompleteList = document.getElementById('autocompleteList');
     let autocompleteIndex = -1;
     let autocompleteItems = [];
     
@@ -1980,7 +1965,7 @@
         showToast('Logs exported!');
     };
     
-    addTrackedEventListener(shadowRoot.getElementById('exportLogs'), 'click', exportLogs);
+    addTrackedEventListener(document.getElementById('exportLogs'), 'click', exportLogs);
 
     const handleConsoleInput = (e) => {
         // Handle autocomplete navigation
@@ -2072,16 +2057,16 @@
         submitConsoleInput();
         consoleInput.focus();
     };
-    addTrackedEventListener(shadowRoot.getElementById('runConsole'), 'click', runConsoleCode);
+    addTrackedEventListener(document.getElementById('runConsole'), 'click', runConsoleCode);
 
     // Navigation functionality
-    const navButtons = shadowRoot.querySelectorAll(".dev-console-nav-button:not(.nav-action)");
-    const sections = shadowRoot.querySelectorAll(".dev-console-section");
+    const navButtons = document.querySelectorAll(".dev-console-nav-button:not(.nav-action)");
+    const sections = document.querySelectorAll(".dev-console-section");
 
     const handleNavClick = (button) => () => {
         const targetId = button.id.replace("nav", "section");
         sections.forEach((section) => section.classList.add("hidden"));
-        shadowRoot.getElementById(targetId)?.classList.remove("hidden");
+        document.getElementById(targetId)?.classList.remove("hidden");
         navButtons.forEach((btn) => btn.classList.remove("active"));
         button.classList.add("active");
 
@@ -2111,20 +2096,28 @@
     
     // Helper function to get clean HTML without displaying it
     const getCleanHtml = () => {
-        // Hide the shadow host so it (and its shadow content) doesn't appear in outerHTML
-        if (host) host.style.display = 'none';
+        const devConsole = document.getElementById('dev-console');
+        devConsole.style.display = 'none';
         const html = document.documentElement.outerHTML;
-        if (host) host.style.display = '';
-        return html;
+        devConsole.style.display = '';
+        
+        // Remove the dev-console HTML from the output
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const parsedDevConsole = doc.getElementById('dev-console');
+        if (parsedDevConsole) {
+            parsedDevConsole.remove();
+        }
+        return doc.documentElement.outerHTML;
     };
     
     const handleElementViewer = () => {
-        const elementsContainer = shadowRoot.querySelector('.elements-container');
+        const elementsContainer = document.querySelector('.elements-container');
         currentCleanHtml = getCleanHtml();
         
         // Hide element inspector panels when viewing HTML
-        const breadcrumb = shadowRoot.getElementById('elementBreadcrumb');
-        const details = shadowRoot.getElementById('elementDetails');
+        const breadcrumb = document.getElementById('elementBreadcrumb');
+        const details = document.getElementById('elementDetails');
         if (breadcrumb) breadcrumb.classList.add('hidden');
         if (details) details.classList.add('hidden');
         selectedElement = null;
@@ -2135,7 +2128,7 @@
         }
         log('Page HTML loaded in the Elements tab.', 'info');
     };
-    addTrackedEventListener(shadowRoot.getElementById('elementViewer'), 'click', handleElementViewer);
+    addTrackedEventListener(document.getElementById('elementViewer'), 'click', handleElementViewer);
     
     // Copy HTML functionality
     const handleCopyHtml = () => {
@@ -2143,7 +2136,7 @@
         const cleanHtml = getCleanHtml();
         copyToClipboard(cleanHtml);
     };
-    addTrackedEventListener(shadowRoot.getElementById('copyHtml'), 'click', handleCopyHtml);
+    addTrackedEventListener(document.getElementById('copyHtml'), 'click', handleCopyHtml);
 
     // Element Inspector functionality
     let isSelectingElement = false;
@@ -2152,39 +2145,25 @@
     let inspectorLabel = null;
     let wasMinimizedBeforeSelection = false;
     
-    const selectElementBtn = shadowRoot.getElementById('selectElement');
-    const elementBreadcrumb = shadowRoot.getElementById('elementBreadcrumb');
-    const elementDetails = shadowRoot.getElementById('elementDetails');
-    const elementTagName = shadowRoot.getElementById('elementTagName');
-    const elementAttributes = shadowRoot.getElementById('elementAttributes');
-    const elementStyles = shadowRoot.getElementById('elementStyles');
-    const computedStyles = shadowRoot.getElementById('computedStyles');
-    const computedFilterInput = shadowRoot.getElementById('computedFilter');
+    const selectElementBtn = document.getElementById('selectElement');
+    const elementBreadcrumb = document.getElementById('elementBreadcrumb');
+    const elementDetails = document.getElementById('elementDetails');
+    const elementTagName = document.getElementById('elementTagName');
+    const elementAttributes = document.getElementById('elementAttributes');
+    const elementStyles = document.getElementById('elementStyles');
+    const computedStyles = document.getElementById('computedStyles');
+    const computedFilterInput = document.getElementById('computedFilter');
     
     // Create inspector overlay and label
     const createInspectorElements = () => {
         if (!inspectorOverlay) {
             inspectorOverlay = document.createElement('div');
-            // className is kept so isDevConsoleElement can identify it via classList.contains
             inspectorOverlay.className = 'element-inspector-overlay';
-            Object.assign(inspectorOverlay.style, {
-                position: 'fixed', pointerEvents: 'none', zIndex: '2147483646',
-                border: '2px solid #60a5fa', background: 'rgba(59,130,246,0.1)',
-                transition: 'all 0.1s ease', boxSizing: 'border-box'
-            });
             document.body.appendChild(inspectorOverlay);
         }
         if (!inspectorLabel) {
             inspectorLabel = document.createElement('div');
-            // className is kept so isDevConsoleElement can identify it via classList.contains
             inspectorLabel.className = 'element-inspector-label';
-            Object.assign(inspectorLabel.style, {
-                position: 'fixed', zIndex: '2147483647', background: '#60a5fa',
-                color: '#fff', padding: '4px 8px', fontSize: '11px',
-                fontFamily: "'SF Mono','Monaco','Inconsolata','Fira Code',monospace",
-                borderRadius: '4px', pointerEvents: 'none', whiteSpace: 'nowrap',
-                maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis'
-            });
             document.body.appendChild(inspectorLabel);
         }
     };
@@ -2244,11 +2223,11 @@
     };
     
     const isDevConsoleElement = (element) => {
-        if (!element) return false;
-        if (element === host || host.contains(element)) return true;
-        if (element.classList.contains('element-inspector-overlay') ||
-            element.classList.contains('element-inspector-label')) return true;
-        return false;
+        const devConsole = document.getElementById('dev-console');
+        return devConsole && (devConsole.contains(element) || element === devConsole || 
+               element.classList.contains('element-inspector-overlay') ||
+               element.classList.contains('element-inspector-label') ||
+               element.classList.contains('dev-console-toast'));
     };
     
     const handleMouseMove = (e) => {
@@ -2295,19 +2274,12 @@
     const startSelectingElement = () => {
         isSelectingElement = true;
         createInspectorElements();
-        // Inject a temporary stylesheet to apply crosshair cursor site-wide.
-        // 'body *' is intentionally broad so every clickable child also shows the crosshair.
-        if (!document.getElementById('dev-console-selecting-style')) {
-            const sel = document.createElement('style');
-            sel.id = 'dev-console-selecting-style';
-            sel.textContent = 'body,body *{cursor:crosshair!important}';
-            (document.head || document.documentElement).appendChild(sel);
-        }
+        document.body.classList.add('selecting-element');
         selectElementBtn.classList.add('active');
         selectElementBtn.innerHTML = '❌ Cancel';
         
         // Minimize the console to allow selecting elements at the bottom
-        const consoleEl = shadowRoot.getElementById('dev-console');
+        const consoleEl = document.getElementById('dev-console');
         wasMinimizedBeforeSelection = consoleEl.classList.contains('minimized');
         if (!wasMinimizedBeforeSelection) {
             consoleEl.classList.add('minimized');
@@ -2323,16 +2295,14 @@
     
     const stopSelectingElement = () => {
         isSelectingElement = false;
-        // Remove the temporary crosshair stylesheet
-        const selStyle = document.getElementById('dev-console-selecting-style');
-        if (selStyle) selStyle.remove();
+        document.body.classList.remove('selecting-element');
         selectElementBtn.classList.remove('active');
         selectElementBtn.innerHTML = '🎯 Select Element';
         hideInspectorOverlay();
         removeInspectorElements();
         
         // Restore the console state if it wasn't minimized before
-        const consoleEl = shadowRoot.getElementById('dev-console');
+        const consoleEl = document.getElementById('dev-console');
         if (!wasMinimizedBeforeSelection) {
             consoleEl.classList.remove('minimized');
         }
@@ -2552,7 +2522,7 @@
         selectedElement = element;
         
         // Clear HTML view when selecting an element
-        const elementsContainer = shadowRoot.querySelector('.elements-container');
+        const elementsContainer = document.querySelector('.elements-container');
         if (elementsContainer) {
             elementsContainer.textContent = '';
         }
@@ -2580,29 +2550,29 @@
     };
     
     // Close element details
-    addTrackedEventListener(shadowRoot.getElementById('closeElementDetails'), 'click', () => {
+    addTrackedEventListener(document.getElementById('closeElementDetails'), 'click', () => {
         elementDetails.classList.add('hidden');
         elementBreadcrumb.classList.add('hidden');
         selectedElement = null;
     });
     
     // Element details tab navigation
-    const elementPanels = shadowRoot.querySelectorAll('.element-panel');
-    shadowRoot.querySelectorAll('.element-tab-btn').forEach(btn => {
+    const elementPanels = document.querySelectorAll('.element-panel');
+    document.querySelectorAll('.element-tab-btn').forEach(btn => {
         addTrackedEventListener(btn, 'click', () => {
-            shadowRoot.querySelectorAll('.element-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.element-tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             elementPanels.forEach(p => p.classList.add('hidden'));
-            shadowRoot.getElementById(btn.dataset.tab + 'Panel').classList.remove('hidden');
+            document.getElementById(btn.dataset.tab + 'Panel').classList.remove('hidden');
         });
     });
     
     // Add new attribute
-    addTrackedEventListener(shadowRoot.getElementById('addAttribute'), 'click', () => {
+    addTrackedEventListener(document.getElementById('addAttribute'), 'click', () => {
         if (!selectedElement) return;
         
-        const nameInput = shadowRoot.getElementById('newAttrName');
-        const valueInput = shadowRoot.getElementById('newAttrValue');
+        const nameInput = document.getElementById('newAttrName');
+        const valueInput = document.getElementById('newAttrValue');
         const name = nameInput.value.trim();
         const value = valueInput.value;
         
@@ -2616,11 +2586,11 @@
     });
     
     // Add new style
-    addTrackedEventListener(shadowRoot.getElementById('addStyle'), 'click', () => {
+    addTrackedEventListener(document.getElementById('addStyle'), 'click', () => {
         if (!selectedElement) return;
         
-        const propInput = shadowRoot.getElementById('newStyleProp');
-        const valueInput = shadowRoot.getElementById('newStyleValue');
+        const propInput = document.getElementById('newStyleProp');
+        const valueInput = document.getElementById('newStyleValue');
         const prop = propInput.value.trim();
         const value = valueInput.value.trim();
         
@@ -2634,7 +2604,7 @@
     });
     
     // Edit element text
-    addTrackedEventListener(shadowRoot.getElementById('editElementText'), 'click', async () => {
+    addTrackedEventListener(document.getElementById('editElementText'), 'click', async () => {
         if (!selectedElement) return;
         
         const currentText = selectedElement.textContent;
@@ -2647,7 +2617,7 @@
     });
     
     // Delete element
-    addTrackedEventListener(shadowRoot.getElementById('deleteElement'), 'click', async () => {
+    addTrackedEventListener(document.getElementById('deleteElement'), 'click', async () => {
         if (!selectedElement) return;
         
         const selector = getElementSelector(selectedElement);
@@ -2667,14 +2637,14 @@
     });
     
     // Copy element HTML
-    addTrackedEventListener(shadowRoot.getElementById('copyElementHtml'), 'click', () => {
+    addTrackedEventListener(document.getElementById('copyElementHtml'), 'click', () => {
         if (!selectedElement) return;
         copyToClipboard(selectedElement.outerHTML);
     });
 
     // Network monitoring functionality
-    const networkContainer = shadowRoot.querySelector('.network-container');
-    const networkDetails = shadowRoot.querySelector('.network-details');
+    const networkContainer = document.querySelector('.network-container');
+    const networkDetails = document.querySelector('.network-details');
     let networkLog = [];
     let networkFilterText = '';
 
@@ -2762,7 +2732,7 @@
     };
 
     // Network filter
-    const networkFilterInput = shadowRoot.getElementById('networkFilter');
+    const networkFilterInput = document.getElementById('networkFilter');
     addTrackedEventListener(networkFilterInput, 'input', (e) => {
         networkFilterText = e.target.value;
         updateNetworkDisplay();
@@ -2838,7 +2808,7 @@ ${entry.responseBody}`;
         networkContainer.classList.remove('hidden');
     };
 
-    addTrackedEventListener(shadowRoot.getElementById('clearNetwork'), 'click', clearNetworkLog);
+    addTrackedEventListener(document.getElementById('clearNetwork'), 'click', clearNetworkLog);
 
     // Override fetch and XMLHttpRequest to monitor network requests
     const originalFetch = window.fetch;
@@ -3003,7 +2973,7 @@ ${entry.responseBody}`;
         log("Cookies cleared", "info");
         showToast("Cookies cleared");
     };
-    addTrackedEventListener(shadowRoot.getElementById("clearCookies"), "click", handleClearCookies);
+    addTrackedEventListener(document.getElementById("clearCookies"), "click", handleClearCookies);
 
     const handleClearStorage = () => {
         localStorage.clear();
@@ -3012,15 +2982,15 @@ ${entry.responseBody}`;
         showToast("Storage cleared");
         updateStorageDisplay();
     };
-    addTrackedEventListener(shadowRoot.getElementById("clearStorage"), "click", handleClearStorage);
+    addTrackedEventListener(document.getElementById("clearStorage"), "click", handleClearStorage);
 
     const handleReloadPage = () => {
         window.location.reload();
     };
-    addTrackedEventListener(shadowRoot.getElementById("reloadPage"), "click", handleReloadPage);
+    addTrackedEventListener(document.getElementById("reloadPage"), "click", handleReloadPage);
 
     // Storage Viewer functionality
-    const storageContainer = shadowRoot.querySelector('.storage-container');
+    const storageContainer = document.querySelector('.storage-container');
     let currentStorageType = 'local';
     
     const updateStorageDisplay = () => {
@@ -3092,22 +3062,22 @@ ${entry.responseBody}`;
     };
     
     // Storage tab buttons
-    shadowRoot.querySelectorAll('.storage-tab-btn').forEach(btn => {
+    document.querySelectorAll('.storage-tab-btn').forEach(btn => {
         addTrackedEventListener(btn, 'click', () => {
-            shadowRoot.querySelectorAll('.storage-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.storage-tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentStorageType = btn.dataset.storage;
             updateStorageDisplay();
         });
     });
     
-    addTrackedEventListener(shadowRoot.getElementById('refreshStorage'), 'click', updateStorageDisplay);
+    addTrackedEventListener(document.getElementById('refreshStorage'), 'click', updateStorageDisplay);
     
     // Initialize storage display when tab is clicked
-    addTrackedEventListener(shadowRoot.getElementById('navStorage'), 'click', updateStorageDisplay);
+    addTrackedEventListener(document.getElementById('navStorage'), 'click', updateStorageDisplay);
 
     // Cookies Viewer functionality
-    const cookiesContainer = shadowRoot.querySelector('.cookies-container');
+    const cookiesContainer = document.querySelector('.cookies-container');
     let cookieFilterText = '';
     
     // Parse cookies into an array of objects
@@ -3229,17 +3199,17 @@ ${entry.responseBody}`;
     };
     
     // Cookie filter
-    const cookieFilterInput = shadowRoot.getElementById('cookieFilter');
+    const cookieFilterInput = document.getElementById('cookieFilter');
     addTrackedEventListener(cookieFilterInput, 'input', (e) => {
         cookieFilterText = e.target.value;
         updateCookiesDisplay();
     });
     
     // Refresh cookies button
-    addTrackedEventListener(shadowRoot.getElementById('refreshCookies'), 'click', updateCookiesDisplay);
+    addTrackedEventListener(document.getElementById('refreshCookies'), 'click', updateCookiesDisplay);
     
     // Add cookie button
-    addTrackedEventListener(shadowRoot.getElementById('addCookie'), 'click', async () => {
+    addTrackedEventListener(document.getElementById('addCookie'), 'click', async () => {
         const name = await showPrompt('Add Cookie - Name', '', 'Enter cookie name...');
         if (!name) return;
         
@@ -3253,7 +3223,7 @@ ${entry.responseBody}`;
     });
     
     // Clear all cookies button
-    addTrackedEventListener(shadowRoot.getElementById('clearAllCookies'), 'click', async () => {
+    addTrackedEventListener(document.getElementById('clearAllCookies'), 'click', async () => {
         const confirmed = await showConfirm('Clear All Cookies', 'Are you sure you want to delete all cookies?', true);
         if (confirmed) {
             document.cookie.split(";").forEach((cookie) => {
@@ -3269,21 +3239,21 @@ ${entry.responseBody}`;
     });
     
     // Initialize cookies display when tab is clicked
-    addTrackedEventListener(shadowRoot.getElementById('navCookies'), 'click', updateCookiesDisplay);
+    addTrackedEventListener(document.getElementById('navCookies'), 'click', updateCookiesDisplay);
 
     // Info tab navigation
-    const infoPanels = shadowRoot.querySelectorAll('.info-panel');
-    shadowRoot.querySelectorAll('.info-tab-btn').forEach(btn => {
+    const infoPanels = document.querySelectorAll('.info-panel');
+    document.querySelectorAll('.info-tab-btn').forEach(btn => {
         addTrackedEventListener(btn, 'click', () => {
-            shadowRoot.querySelectorAll('.info-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.info-tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             infoPanels.forEach(p => p.classList.add('hidden'));
-            shadowRoot.getElementById(btn.dataset.info + 'Info').classList.remove('hidden');
+            document.getElementById(btn.dataset.info + 'Info').classList.remove('hidden');
         });
     });
 
     // About Info - improved design
-    const aboutInfo = shadowRoot.getElementById("aboutInfo");
+    const aboutInfo = document.getElementById("aboutInfo");
     aboutInfo.innerHTML = `
         <div class="about-logo">🛠️</div>
         <div class="about-title">Mobile Dev Console</div>
@@ -3297,7 +3267,7 @@ ${entry.responseBody}`;
     `;
 
     // Device Info - improved design with cards
-    const deviceInfo = shadowRoot.getElementById("deviceInfo");
+    const deviceInfo = document.getElementById("deviceInfo");
     
     const createInfoCard = (title, items) => {
         const card = document.createElement('div');
@@ -3352,7 +3322,7 @@ ${entry.responseBody}`;
     }
 
     // Performance Info
-    const performanceInfo = shadowRoot.getElementById("performanceInfo");
+    const performanceInfo = document.getElementById("performanceInfo");
     
     const updatePerformanceMetrics = () => {
         performanceInfo.innerHTML = '';
@@ -3438,26 +3408,21 @@ ${entry.responseBody}`;
     };
     
     // Update performance when tab is clicked
-    addTrackedEventListener(shadowRoot.getElementById('navInfo'), 'click', updatePerformanceMetrics);
+    addTrackedEventListener(document.getElementById('navInfo'), 'click', updatePerformanceMetrics);
     
     // Theme toggle functionality
     const handleThemeToggle = () => {
         theme = theme === 'dark' ? 'light' : 'dark';
         themeVars = getThemeVars(theme);
-        const newCss = getConsoleStyles(themeVars);
-        if (shadowStyleSheet instanceof CSSStyleSheet) {
-            shadowStyleSheet.replaceSync(newCss);
-        } else {
-            shadowStyleSheet.textContent = newCss;
-        }
-        shadowRoot.getElementById('themeIcon').textContent = theme === 'dark' ? '☀️' : '🌙';
+        style.textContent = getConsoleStyles(themeVars);
+        document.getElementById('themeIcon').textContent = theme === 'dark' ? '☀️' : '🌙';
         log(`Theme switched to ${theme} mode`, 'info');
     };
-    addTrackedEventListener(shadowRoot.getElementById('themeToggle'), 'click', handleThemeToggle);
+    addTrackedEventListener(document.getElementById('themeToggle'), 'click', handleThemeToggle);
     
     // Resize handle functionality
-    const resizeHandle = shadowRoot.getElementById('resizeHandle');
-    const consoleEl = shadowRoot.getElementById('dev-console');
+    const resizeHandle = document.getElementById('resizeHandle');
+    const consoleEl = document.getElementById('dev-console');
     let isResizing = false;
     let startY = 0;
     let startHeight = 0;
@@ -3503,7 +3468,7 @@ ${entry.responseBody}`;
             stopSelectingElement();
         }
         removeInspectorElements();
-        // Cursor selection style removed via stopSelectingElement or temp stylesheet cleanup
+        document.body.classList.remove('selecting-element');
         
         // Restore original console methods
         ["log", "error", "warn", "info", "table", "clear", "assert", "dir",
@@ -3522,15 +3487,16 @@ ${entry.responseBody}`;
         XMLHttpRequest.prototype.send = originalXHRSend;
         XMLHttpRequest.prototype.setRequestHeader = originalXHRSetRequestHeader;
         
-        // Shadow DOM styles are cleaned up automatically when the host element is removed
+        // Remove style element
+        style.remove();
     };
 
     // Close button functionality with cleanup
     const handleConsoleExit = () => {
         cleanup();
-        host.remove();
+        document.getElementById("dev-console").remove();
     };
-    addTrackedEventListener(shadowRoot.getElementById("consoleExit"), "click", handleConsoleExit);
+    addTrackedEventListener(document.getElementById("consoleExit"), "click", handleConsoleExit);
 
     // Override console methods - call original and log to dev console
     // Explicitly capture all methods we will override so cleanup can reliably restore them.
@@ -3632,7 +3598,7 @@ ${entry.responseBody}`;
         if (consoleGroupDepth > 0) consoleGroupDepth--;
     };
 
-    const minimizeButton = shadowRoot.getElementById('consoleMinimize');
+    const minimizeButton = document.getElementById('consoleMinimize');
     const minimizeIcon = minimizeButton.querySelector('.nav-icon');
 
     let isMinimized = false;
@@ -3642,7 +3608,7 @@ ${entry.responseBody}`;
         consoleEl.classList.toggle('minimized', isMinimized);
         minimizeIcon.textContent = isMinimized ? '+' : '−';
         if (!isMinimized) {
-            const consoleTab = shadowRoot.getElementById('navConsole');
+            const consoleTab = document.getElementById('navConsole');
             consoleTab.click();
         }
     }
