@@ -69,13 +69,15 @@ A lightweight, in-browser developer console designed specifically for mobile web
 3. Paste the following code as the URL:
 
 ```javascript
-javascript:(function(){var script=document.createElement('script');script.src='https://raw.githack.com/OshekharO/Mobile-Console/main/main.js';document.body.appendChild(script);})();
+javascript:(function(){var s=document.createElement('script');s.src='https://raw.githack.com/OshekharO/Mobile-Console/main/main.js';(document.body||document.documentElement).appendChild(s);})();
 ```
 
 4. Save the bookmark
 5. Navigate to any website and tap/click the bookmarklet to launch the console
 
 > **Note**: The bookmarklet loads the script from GitHub via raw.githack.com CDN. For security-sensitive environments, consider self-hosting the `main.js` file.
+>
+> **CSP compatibility**: The console uses a Shadow DOM with Constructable Stylesheets (`adoptedStyleSheets`) for CSS isolation, bypassing `style-src 'unsafe-inline'` Content Security Policy restrictions. If the target site blocks external scripts via `script-src`, you can paste the full contents of `main.js` directly into the bookmarklet URL with a `javascript:` prefix instead.
 
 ### Tips
 - Use ↑ and ↓ arrow keys to navigate through command history
