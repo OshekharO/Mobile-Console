@@ -2081,6 +2081,8 @@
             isOnConsoleTab = false;
             unseenNetwork = 0;
             updateNetworkBadge();
+            // Refresh network display when switching to Network tab
+            updateNetworkDisplay();
         } else {
             isOnConsoleTab = false;
             isOnNetworkTab = false;
@@ -2659,9 +2661,11 @@
         if (!isOnNetworkTab) {
             unseenNetwork++;
             updateNetworkBadge();
+        } else {
+            // Performance optimization: Only update Network DOM when the tab is currently visible/active.
+            // When off-tab, updates are deferred until the user clicks the Network tab.
+            updateNetworkDisplay();
         }
-
-        updateNetworkDisplay();
     };
     
     const getStatusClass = (status) => {
