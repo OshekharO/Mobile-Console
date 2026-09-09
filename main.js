@@ -1728,8 +1728,11 @@
         if (currentLogFilter !== 'all' && type !== currentLogFilter) {
             entry.style.display = 'none';
         }
-        if (currentTextFilter && !String(message).toLowerCase().includes(currentTextFilter.toLowerCase())) {
-            entry.style.display = 'none';
+        if (currentTextFilter) {
+            const filterLower = currentTextFilter.toLowerCase();
+            if (!String(message).toLowerCase().includes(filterLower)) {
+                entry.style.display = 'none';
+            }
         }
         
         consoleOutput.appendChild(entry);
@@ -1737,11 +1740,13 @@
     };
 
     // Console filtering
+    // Bolt: Hoisting currentTextFilter.toLowerCase() out of the loop prevents up to 500 redundant string lowercasing calls per filter pass
     const applyConsoleFilters = () => {
         const entries = consoleOutput.querySelectorAll('.console-entry');
+        const filterLower = currentTextFilter ? currentTextFilter.toLowerCase() : '';
         entries.forEach(entry => {
             const matchesType = currentLogFilter === 'all' || entry.dataset.type === currentLogFilter;
-            const matchesText = !currentTextFilter || entry.dataset.message.includes(currentTextFilter.toLowerCase());
+            const matchesText = !filterLower || entry.dataset.message.includes(filterLower);
             entry.style.display = matchesType && matchesText ? '' : 'none';
         });
     };
