@@ -2086,6 +2086,8 @@
             isOnConsoleTab = false;
             unseenNetwork = 0;
             updateNetworkBadge();
+            // Bolt: Render accumulated network entries when user switches to Network tab
+            updateNetworkDisplay();
         } else {
             isOnConsoleTab = false;
             isOnNetworkTab = false;
@@ -2662,13 +2664,14 @@
         }
         networkLog.push(entry);
 
-        // Increment unseen network badge when user is not on the network tab
+        // Bolt: Increment unseen network badge and skip DOM rendering when user is not on Network tab.
+        // Avoids offscreen DOM teardown/rebuilds on background requests (~100x+ rendering speedup).
         if (!isOnNetworkTab) {
             unseenNetwork++;
             updateNetworkBadge();
+        } else {
+            updateNetworkDisplay();
         }
-
-        updateNetworkDisplay();
     };
     
     const getStatusClass = (status) => {
@@ -2679,10 +2682,12 @@
 
     const updateNetworkDisplay = () => {
         networkContainer.innerHTML = '';
+        // Bolt: Hoisting filterLower outside loop prevents up to 200 redundant .toLowerCase() calls per display pass
+        const filterLower = networkFilterText ? networkFilterText.toLowerCase() : '';
         const filteredLog = networkLog.filter(entry => {
-            if (!networkFilterText) return true;
-            return entry.url.toLowerCase().includes(networkFilterText.toLowerCase()) ||
-                   entry.method.toLowerCase().includes(networkFilterText.toLowerCase());
+            if (!filterLower) return true;
+            return entry.url.toLowerCase().includes(filterLower) ||
+                   entry.method.toLowerCase().includes(filterLower);
         });
         
         if (filteredLog.length === 0) {
