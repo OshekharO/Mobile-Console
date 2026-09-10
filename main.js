@@ -2488,11 +2488,13 @@
         const computed = window.getComputedStyle(element);
         const allProps = Array.from(computed);
         
+        // Bolt: Hoisting currentComputedFilter.toLowerCase() out of the loop prevents hundreds of redundant string lowercasing calls per filter pass across all computed CSS properties (~300+)
+        const filterLower = currentComputedFilter ? currentComputedFilter.toLowerCase() : '';
         const filteredProps = allProps.filter(prop => {
-            if (!currentComputedFilter) return true;
+            if (!filterLower) return true;
             const value = computed.getPropertyValue(prop);
-            return prop.toLowerCase().includes(currentComputedFilter.toLowerCase()) ||
-                   value.toLowerCase().includes(currentComputedFilter.toLowerCase());
+            return prop.toLowerCase().includes(filterLower) ||
+                   value.toLowerCase().includes(filterLower);
         });
         
         filteredProps.forEach(prop => {
