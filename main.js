@@ -224,7 +224,13 @@
         success: '#10b981',
         warning: '#f59e0b',
         error: '#ef4444',
-        shadow: 'rgba(0, 0, 0, 0.08)'
+        shadow: 'rgba(0, 0, 0, 0.08)',
+        errorBg: '#fee2e2',
+        warningBg: '#fef3c7',
+        infoBg: '#dbeafe',
+        successBg: '#d1fae5',
+        purpleBg: '#f3e8ff',
+        purpleText: '#7c3aed'
     } : {
         bg: '#0f0f23',
         bgSecondary: '#1a1a2e',
@@ -239,7 +245,13 @@
         success: '#34d399',
         warning: '#fbbf24',
         error: '#f87171',
-        shadow: 'rgba(0, 0, 0, 0.3)'
+        shadow: 'rgba(0, 0, 0, 0.3)',
+        errorBg: 'rgba(239, 68, 68, 0.2)',
+        warningBg: 'rgba(245, 158, 11, 0.2)',
+        infoBg: 'rgba(59, 130, 246, 0.2)',
+        successBg: 'rgba(16, 185, 129, 0.2)',
+        purpleBg: 'rgba(124, 58, 237, 0.2)',
+        purpleText: '#a78bfa'
     };
 
     let themeVars = getThemeVars(theme);
@@ -261,13 +273,26 @@
             --warning: ${vars.warning};
             --error: ${vars.error};
             --shadow: ${vars.shadow};
+            --error-bg: ${vars.errorBg};
+            --warning-bg: ${vars.warningBg};
+            --info-bg: ${vars.infoBg};
+            --success-bg: ${vars.successBg};
+            --purple-bg: ${vars.purpleBg};
+            --purple-text: ${vars.purpleText};
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            --radius-xs: 3px;
+            --radius-sm: 4px;
+            --radius-md: 6px;
+            --radius-lg: 8px;
+            --radius-xl: 12px;
             position: fixed;
             bottom: 0;
             left: 0;
             width: 100%;
             height: 50%;
             background: var(--bg);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: var(--font-sans);
             z-index: 10000;
             display: flex;
             flex-direction: column;
@@ -434,7 +459,7 @@
             flex-grow: 1;
             overflow-y: auto;
             padding: 10px;
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-family: var(--font-mono);
             font-size: 12px;
             line-height: 1.5;
             color: var(--text);
@@ -486,9 +511,9 @@
             color: white;
         }
         .console-entry.log .type-badge { background: var(--bg-tertiary); color: var(--text); }
-        .console-entry.error .type-badge { background: #fee2e2; color: var(--error); }
-        .console-entry.warn .type-badge { background: #fef3c7; color: var(--warning); }
-        .console-entry.info .type-badge { background: #dbeafe; color: var(--accent); }
+        .console-entry.error .type-badge { background: var(--error-bg); color: var(--error); }
+        .console-entry.warn .type-badge { background: var(--warning-bg); color: var(--warning); }
+        .console-entry.info .type-badge { background: var(--info-bg); color: var(--accent); }
         .console-entry.input .type-badge { background: var(--bg-tertiary); color: var(--text-secondary); }
         .console-entry.error { border-left: 3px solid var(--error); }
         .console-entry.warn { border-left: 3px solid var(--warning); }
@@ -510,7 +535,7 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             padding: 8px 12px;
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-family: var(--font-mono);
             font-size: 12px;
             color: var(--text);
             background: var(--bg);
@@ -542,7 +567,7 @@
         .autocomplete-item {
             padding: 8px 12px;
             cursor: pointer;
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-family: var(--font-mono);
             font-size: 12px;
             color: var(--text);
             display: flex;
@@ -564,10 +589,10 @@
             background: var(--bg-secondary);
             color: var(--text-secondary);
         }
-        .autocomplete-item .type.keyword { background: #dbeafe; color: var(--accent); }
-        .autocomplete-item .type.method { background: #d1fae5; color: var(--success); }
-        .autocomplete-item .type.property { background: #fef3c7; color: var(--warning); }
-        .autocomplete-item .type.history { background: #f3e8ff; color: #7c3aed; }
+        .autocomplete-item .type.keyword { background: var(--info-bg); color: var(--accent); }
+        .autocomplete-item .type.method { background: var(--success-bg); color: var(--success); }
+        .autocomplete-item .type.property { background: var(--warning-bg); color: var(--warning); }
+        .autocomplete-item .type.history { background: var(--purple-bg); color: var(--purple-text); }
         
         /* Action buttons */
         .action-btn {
@@ -954,9 +979,9 @@
             font-size: 10px;
             font-weight: 600;
         }
-        .network-item-status.success { background: #d1fae5; color: var(--success); }
-        .network-item-status.error { background: #fee2e2; color: var(--error); }
-        .network-item-status.redirect { background: #fef3c7; color: var(--warning); }
+        .network-item-status.success { background: var(--success-bg); color: var(--success); }
+        .network-item-status.error { background: var(--error-bg); color: var(--error); }
+        .network-item-status.redirect { background: var(--warning-bg); color: var(--warning); }
         .network-item-url {
             word-break: break-all;
             font-size: 12px;
@@ -1003,7 +1028,7 @@
         }
         .elements-container {
             white-space: pre-wrap;
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-family: var(--font-mono);
             font-size: 12px;
             padding: 10px;
             overflow-x: auto;
@@ -1109,7 +1134,7 @@
             color: white;
             padding: 4px 8px;
             font-size: 11px;
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-family: var(--font-mono);
             border-radius: 4px;
             pointer-events: none;
             white-space: nowrap;
@@ -1124,7 +1149,7 @@
             padding: 6px 8px;
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border);
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-family: var(--font-mono);
             font-size: 10px;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -1168,7 +1193,7 @@
             border-bottom: 1px solid var(--border);
         }
         .element-tag-name {
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-family: var(--font-mono);
             font-size: 14px;
             font-weight: 600;
             color: var(--accent);
@@ -1237,7 +1262,7 @@
             padding: 5px 6px;
             background: var(--bg);
             border-radius: 6px;
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-family: var(--font-mono);
             font-size: 10px;
         }
         .attr-name, .style-prop {
@@ -1299,7 +1324,7 @@
             background: var(--bg);
             color: var(--text);
             font-size: 11px;
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-family: var(--font-mono);
         }
         .attr-input:focus, .style-input:focus {
             border-color: var(--accent);
@@ -1377,7 +1402,7 @@
             padding: 4px 8px;
             background: var(--bg);
             border-radius: 4px;
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-family: var(--font-mono);
             font-size: 10px;
         }
         .computed-prop {
@@ -1508,6 +1533,20 @@
         }
         .dev-console-modal-btn.danger:hover {
             opacity: 0.9;
+        }
+        /* Accessibility: Focus visible & Reduced motion */
+        .dev-console-container button:focus-visible,
+        .dev-console-container input:focus-visible,
+        .dev-console-container textarea:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 1px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .dev-console-container,
+            .dev-console-container * {
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+            }
         }
     `;
     
@@ -2775,7 +2814,7 @@
         const heading = document.createElement('h3');
         heading.textContent = 'Request Details';
         heading.style.margin = '0 0 10px 0';
-        heading.style.color = themeVars.text;
+        heading.style.color = 'var(--text)';
 
         const detailsText = `URL: ${entry.url}
 Method: ${entry.method}
