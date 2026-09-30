@@ -15,3 +15,9 @@
 **Learning:** Repeatedly invoking `.toLowerCase()` on static arrays (`jsKeywords`, `commonMethods`, `commonProperties`) during every autocomplete input event and sorting pass causes unnecessary heap allocations and CPU work. Pre-computing prepared item objects (`{ text, type, lower }`) during module initialization reduces filtering execution time by ~50% (from 700ms down to 341ms over 50,000 autocomplete evaluations).
 
 **Action:** Whenever implementing client-side autocomplete or search over static/semi-static lists, pre-compute lowercased properties upfront on startup or list creation.
+
+## 2026-03-09 - Serializing Non-Enumerable Properties on JavaScript Error Objects
+
+**Learning:** `JSON.stringify` ignores non-enumerable properties such as `name`, `message`, `stack`, and `cause` on standard JavaScript `Error` objects, resulting in empty object representations `{}` when logged or serialized. Handling `value instanceof Error` explicitly in `JSON.stringify` replacer functions ensures error details are preserved during logging/serialization.
+
+**Action:** In custom replacer functions used for logging or JSON serialization, extract non-enumerable properties (`name`, `message`, `stack`, `cause`) from `Error` instances into a plain object.

@@ -51,6 +51,11 @@
         const seen = new WeakSet();
         try {
             return JSON.stringify(obj, (key, value) => {
+                if (value instanceof Error) {
+                    const errObj = { name: value.name, message: value.message, stack: value.stack };
+                    if (value.cause !== undefined) errObj.cause = value.cause;
+                    return errObj;
+                }
                 if (typeof value === 'bigint') return `${value}n`;
                 if (typeof value === 'function') return `[Function: ${value.name || 'anonymous'}]`;
                 if (typeof value === 'symbol') return value.toString();
@@ -3181,10 +3186,12 @@ ${entry.responseBody}`;
         const cookies = parseCookies();
         cookiesContainer.innerHTML = '';
         
+        // Bolt: Hoisting filterLower outside loop prevents redundant .toLowerCase() calls and allocations per cookie filter pass
+        const filterLower = cookieFilterText ? cookieFilterText.toLowerCase() : '';
         const filteredCookies = cookies.filter(cookie => {
-            if (!cookieFilterText) return true;
-            return cookie.name.toLowerCase().includes(cookieFilterText.toLowerCase()) ||
-                   cookie.value.toLowerCase().includes(cookieFilterText.toLowerCase());
+            if (!filterLower) return true;
+            return cookie.name.toLowerCase().includes(filterLower) ||
+                   cookie.value.toLowerCase().includes(filterLower);
         });
         
         if (filteredCookies.length === 0) {
